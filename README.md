@@ -16,7 +16,21 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
 
 - UI tweaks and layout improvements
 - Buttons, shortcut tools, and quality-of-life enhancements
-- Inventory management 
+- Inventory management
+
+### ui-improvements.js
+
+- Menu modifications
+  - moves halloween event to bottom of menu (event is currently over)
+  - adds link to Wave 3
+  - adds link to Adventurer's Guild
+  - adds link to Legendary Forge
+  - fairly easy to add custom links using `addMenuLinkAfter`
+- Wave Page
+  - Modified `Loot X monsters` feature to be _significantly_ faster
+- Battlepass
+  - all 3 tiers are now linked when scrolling
+  - auto scrolls to current level of battlepass.
 
 ---
 
@@ -27,18 +41,21 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
 Tampermonkey is required to run the veyra-hud user scripts.
 
 #### Chrome / Brave / Edge
+
 1. Open the Web Store:  
-   https://www.tampermonkey.net/?ext=dhdg&browser=chrome  
-2. Click **Add to Chrome**  
+   https://www.tampermonkey.net/?ext=dhdg&browser=chrome
+2. Click **Add to Chrome**
 3. Approve the extension
 
 #### Firefox
+
 1. Open the Add-ons page:  
-   https://www.tampermonkey.net/?ext=dhdg&browser=firefox  
-2. Click **Add to Firefox**  
+   https://www.tampermonkey.net/?ext=dhdg&browser=firefox
+2. Click **Add to Firefox**
 3. Approve permissions
 
 #### Safari
+
 1. Install from the Mac App Store:  
    https://www.tampermonkey.net/?ext=dhdg&browser=safari
 
@@ -49,7 +66,7 @@ After installation, you should see a **Tampermonkey icon** in your browser toolb
 ## 🧩 Installing veyra-hud scripts
 
 1. Open **Tampermonkey Dashboard**  
-   (click the Tampermonkey icon → *Dashboard*)
+   (click the Tampermonkey icon → _Dashboard_)
 
 2. Click **“+ Create a new script”** or **“Import”**
 

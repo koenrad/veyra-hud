@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.2
-// @description  Makes various ui improvements. Faster lootX, extra menu items,
+// @version      1.0.3
+// @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @match        https://demonicscans.org/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=demonicscans.org
@@ -28,93 +28,11 @@
     }
   `);
 
-  function overrideLootX() {
-    const btnLootX = document.getElementById("btnLootX");
-
-    const customBtn = document.createElement("button");
-    customBtn.id = "btnCustomLoot";
-    customBtn.type = "button";
-    customBtn.className = "custom-loot-btn";
-    customBtn.textContent = "💰 Loot X monsters (faster)";
-
-    btnLootX.insertAdjacentElement("afterend", customBtn);
-    btnLootX.style.display = "none";
-
-    const setRunning = (running) => {
-      if (running) {
-        customBtn.classList.add("is-running");
-        customBtn.textContent = "Working...";
-      } else {
-        customBtn.classList.remove("is-running");
-        customBtn.textContent = "💰 Loot X monsters (faster)";
-      }
-    };
-
-    customBtn?.addEventListener("click", async () => {
-      const n = Math.max(1, parseInt($input.value || "1", 10));
-      const eligibleEls = Array.from(
-        document.querySelectorAll('.monster-card[data-eligible="1"]')
-      );
-      const targetIds = eligibleEls
-        .slice(0, n)
-        .map((el) => parseInt(el.dataset.monsterId, 10))
-        .filter(Boolean);
-
-      if (targetIds.length === 0) {
-        $stat.textContent = "No eligible dead monsters you joined.";
-        return;
-      }
-
-      setRunning(true);
-      let ok = 0,
-        fail = 0;
-      let totalExp = 0,
-        totalGold = 0;
-      const allItems = [];
-      const allNotes = [];
-      for (let i = 0; i < targetIds.length; i++) {
-        $stat.textContent = `Looting ${i + 1}/${
-          targetIds.length
-        }... (success: ${ok}, fail: ${fail})`;
-        try {
-          const res = await lootOne(targetIds[i]);
-          if (res.ok) {
-            ok++;
-            totalExp += res.exp;
-            totalGold += res.gold;
-            if (res.items?.length) {
-              allItems.push(...res.items);
-            } else if (res.note) {
-              allNotes.push(res.note);
-            }
-            const el = document.querySelector(
-              `.monster-card[data-monster-id="${targetIds[i]}"]`
-            );
-            if (el) el.setAttribute("data-eligible", "0");
-          } else {
-            fail++;
-            if (res.note) allNotes.push(res.note);
-          }
-        } catch (_e) {
-          fail++;
-          allNotes.push("Server error");
-        }
-        // await new Promise((r) => setTimeout(r, 150));
-      }
-      $stat.textContent = `Done. Looted ${ok}, failed ${fail}.`;
-      setRunning(false);
-      openBatchLootModal(
-        {
-          processed: targetIds.length,
-          success: ok,
-          fail,
-          exp: totalExp,
-          gold: totalGold,
-        },
-        allItems,
-        allNotes
-      );
-    });
+  // ===============================
+  // UTILITIES
+  // ===============================
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   function addMenuLinkAfter(afterLabel, newUrl, newTitle, newIcon = "✨") {
@@ -189,5 +107,176 @@
   });
   // --------------------- Adventurer's Guild Page --------------------- //
 
+  // ------------------------ Battle Pass Page ------------------------- //
+
+  // sync scroll bars
+  function syncScrollBars() {
+    const scrollContainers = Array.from(
+      document.querySelectorAll(".bp-scroll")
+    );
+
+    let isSyncing = false;
+
+    scrollContainers.forEach((container) => {
+      container.addEventListener("scroll", () => {
+        if (isSyncing) return;
+        isSyncing = true;
+
+        const x = container.scrollLeft;
+
+        scrollContainers.forEach((other) => {
+          if (other !== container) {
+            other.scrollLeft = x;
+          }
+        });
+
+        isSyncing = false;
+      });
+    });
+  }
+
+  function getHighestReachedLevel() {
+    const reachedBadges = [...document.querySelectorAll(".lvl-badge")].filter(
+      (b) => b.textContent.trim() === "Reached"
+    );
+
+    if (reachedBadges.length === 0) return null;
+
+    // Extract L# from the sibling badge
+    const levels = reachedBadges
+      .map((badge) => {
+        const parent = badge.parentElement;
+        const levelBadge = parent.querySelector(
+          '.lvl-badge:not([style*="Reached"])'
+        );
+        if (!levelBadge) return null;
+        const match = levelBadge.textContent.trim().match(/^L(\d+)$/);
+        return match ? parseInt(match[1], 10) : null;
+      })
+      .filter((n) => n !== null);
+    return Math.max(...levels);
+  }
+
+  function scrollToLevel(level) {
+    const scrollContainers = document.querySelectorAll(".bp-scroll");
+    if (!scrollContainers) return;
+    for (const scrollContainer of scrollContainers) {
+      const cards = [...scrollContainer.querySelectorAll(".level-card")];
+
+      let targetCard = cards.find((card) => {
+        const badge = card.querySelector(".lvl-top .lvl-badge");
+        if (!badge) return false;
+        return badge.textContent.trim() === `L${level}`;
+      });
+
+      if (!targetCard) return;
+      const offset =
+        targetCard.offsetLeft -
+        scrollContainer.clientWidth / 2 +
+        targetCard.clientWidth / 2;
+
+      scrollContainer.scrollTo({
+        left: offset,
+        behavior: "smooth",
+      });
+    }
+  }
+
+  async function autoScrollToCurrentLevel() {
+    const level = getHighestReachedLevel();
+    if (!level) return;
+    scrollToLevel(level);
+    await sleep(1000);
+    syncScrollBars();
+  }
+
+  setTimeout(() => {
+    autoScrollToCurrentLevel();
+  }, 1300);
+
+  // ------------------------ Battle Pass Page ------------------------- //
+
+  // -------------------------- Wave X Page ---------------------------- //
+  function overrideLootX() {
+    const btnLootX = document.getElementById("btnLootX");
+    if (btnLootX) {
+      const customBtn = document.createElement("button");
+      customBtn.id = "btnCustomLoot";
+      customBtn.type = "button";
+      customBtn.className = "custom-loot-btn";
+      customBtn.textContent = "💰 Loot X monsters (faster)";
+
+      btnLootX.insertAdjacentElement("afterend", customBtn);
+      btnLootX.style.display = "none";
+
+      customBtn?.addEventListener("click", async () => {
+        const n = Math.max(1, parseInt($input.value || "1", 10));
+        const eligibleEls = Array.from(
+          document.querySelectorAll('.monster-card[data-eligible="1"]')
+        );
+        const targetIds = eligibleEls
+          .slice(0, n)
+          .map((el) => parseInt(el.dataset.monsterId, 10))
+          .filter(Boolean);
+
+        if (targetIds.length === 0) {
+          $stat.textContent = "No eligible dead monsters you joined.";
+          return;
+        }
+
+        setRunning(true);
+        let ok = 0,
+          fail = 0;
+        let totalExp = 0,
+          totalGold = 0;
+        const allItems = [];
+        const allNotes = [];
+        for (let i = 0; i < targetIds.length; i++) {
+          $stat.textContent = `Looting ${i + 1}/${
+            targetIds.length
+          }... (success: ${ok}, fail: ${fail})`;
+          try {
+            const res = await lootOne(targetIds[i]);
+            if (res.ok) {
+              ok++;
+              totalExp += res.exp;
+              totalGold += res.gold;
+              if (res.items?.length) {
+                allItems.push(...res.items);
+              } else if (res.note) {
+                allNotes.push(res.note);
+              }
+              const el = document.querySelector(
+                `.monster-card[data-monster-id="${targetIds[i]}"]`
+              );
+              if (el) el.setAttribute("data-eligible", "0");
+            } else {
+              fail++;
+              if (res.note) allNotes.push(res.note);
+            }
+          } catch (_e) {
+            fail++;
+            allNotes.push("Server error");
+          }
+          // await new Promise((r) => setTimeout(r, 150));
+        }
+        $stat.textContent = `Done. Looted ${ok}, failed ${fail}.`;
+        setRunning(false);
+        openBatchLootModal(
+          {
+            processed: targetIds.length,
+            success: ok,
+            fail,
+            exp: totalExp,
+            gold: totalGold,
+          },
+          allItems,
+          allNotes
+        );
+      });
+    }
+  }
+
   overrideLootX();
+  // -------------------------- Wave X Page ---------------------------- //
 })();
