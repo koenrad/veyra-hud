@@ -84,12 +84,6 @@
   );
 
   if (homeLink) {
-    addMenuLinkAfter(
-      "Home",
-      "/a_lizardmen_winter.php",
-      "Lizardmen's Winter",
-      "🎄"
-    );
     addMenuLinkAfter("Home", "/active_wave.php?gate=3&wave=8", "Wave 3", "🌊");
     addMenuLinkAfter(
       "Wave 3",
@@ -102,6 +96,12 @@
       "/legendary_forge.php",
       "Legendary Forge",
       "🔥"
+    );
+    addMenuLinkAfter(
+      "Home",
+      "/a_lizardmen_winter.php",
+      "Lizardmen's Winter",
+      "🎄"
     );
   }
   // -------------------- Menu Sidebar / Navigation -------------------- //
