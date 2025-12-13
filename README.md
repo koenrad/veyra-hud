@@ -22,6 +22,7 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
 
 - Menu modifications
   - moves halloween event to bottom of menu (event is currently over)
+  - adds Lizardman Winter event link to nav bar
   - adds link to Wave 3
   - adds link to Adventurer's Guild
   - adds link to Legendary Forge
