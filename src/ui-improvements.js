@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.3
+// @version      1.0.4
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @match        https://demonicscans.org/*
@@ -84,6 +84,12 @@
   );
 
   if (homeLink) {
+    addMenuLinkAfter(
+      "Home",
+      "/a_lizardmen_winter.php",
+      "Lizardmen's Winter",
+      "🎄"
+    );
     addMenuLinkAfter("Home", "/active_wave.php?gate=3&wave=8", "Wave 3", "🌊");
     addMenuLinkAfter(
       "Wave 3",
