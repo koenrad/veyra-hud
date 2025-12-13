@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Filter Inventory
 // @namespace    http://tampermonkey.net/
-// @version      1.0.1
+// @version      1.0.2
 // @description  Filters the inventory semi-permanently, centers the sets on mobile
 // @author       koenrad
-// @match        https://demonicscans.org/inventory.php
+// @match        https://demonicscans.org/inventory.php*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=demonicscans.org
 // @grant        GM_addStyle
 // ==/UserScript==
