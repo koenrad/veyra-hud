@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.4
+// @version      1.0.5
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @match        https://demonicscans.org/*
@@ -285,4 +285,141 @@
 
   overrideLootX();
   // -------------------------- Wave X Page ---------------------------- //
+
+  // ---------------------------- Merchant ----------------------------- //
+
+  function getGoldBalance() {
+    const el = document.getElementById("goldBalance");
+    return el ? parseInt(el.textContent.replace(/[^\d]/g, ""), 10) || 0 : 0;
+  }
+
+  function injectBuyX() {
+    const goldBalance = getGoldBalance();
+
+    document.querySelectorAll(".card").forEach((card) => {
+      if ((card.dataset.currency || "").toLowerCase() !== "gold") return;
+
+      const price = parseInt(card.dataset.price || "0", 10);
+      const maxQ = parseInt(card.dataset.maxq || "0", 10);
+      const bought = parseInt(card.dataset.bought || "0", 10);
+      const merchId = parseInt(card.dataset.merchId, 10);
+      const remaining = maxQ - bought;
+
+      if (!price || !maxQ || remaining <= 1) {
+        return;
+      }
+
+      const affordable = Math.floor(goldBalance / price);
+      const buyX = Math.min(remaining, affordable);
+
+      const actions = card.querySelector(".actions");
+      const buyBtn = actions?.querySelector(".buy-btn");
+      if (!actions || !buyBtn) return;
+
+      if (actions.querySelector(".buy-x-btn")) return;
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn buy-x-btn";
+      btn.textContent = `Buy ${buyX}`;
+      btn.disabled = buyX <= 0;
+
+      btn.addEventListener("click", async () => {
+        if (btn.disabled) return;
+
+        const itemName =
+          card.querySelector(".name")?.textContent?.trim() || "this item";
+
+        const totalCost = price * buyX;
+
+        const confirmed = window.confirm(
+          `Confirm Purchase\n\nBuy ${buyX} × ${itemName}\nCost: ${totalCost.toLocaleString()} Gold`
+        );
+
+        if (!confirmed) return;
+
+        btn.disabled = true;
+
+        try {
+          const params = new URLSearchParams();
+          params.set("merch_id", merchId.toString());
+          params.set("qty", buyX.toString());
+
+          const res = await fetch("merchant_buy.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: params.toString(),
+          });
+
+          const data = await res.json().catch(() => ({}));
+
+          if ((data.status || "").trim() === "success") {
+            adjustTopbarCurrency("gold", -(price * buyX));
+
+            const infoRow = card.querySelector(".muted");
+            if (typeof data.remaining === "number") {
+              const newBought = maxQ - data.remaining;
+              if (infoRow) {
+                infoRow.textContent = `Bought: ${newBought} / ${maxQ}`;
+              }
+              card.dataset.bought = String(newBought);
+              btn.disabled = data.remaining <= 0;
+            } else {
+              const newBought = Math.min(maxQ, bought + buyX);
+              if (infoRow) {
+                infoRow.textContent = `Bought: ${newBought} / ${maxQ}`;
+              }
+              card.dataset.bought = String(newBought);
+              btn.disabled = newBought >= maxQ;
+            }
+
+            showPurchaseModal((data.message || "Purchased!").trim(), "success");
+          } else {
+            const msg = (data.message || "Purchase failed.").trim();
+            const warn = /not enough (gold|gems)/i.test(msg);
+            showPurchaseModal(msg, warn ? "warn" : "error");
+            btn.disabled = false;
+          }
+        } catch {
+          showPurchaseModal("Server error. Please try again.", "error");
+          btn.disabled = false;
+        }
+      });
+
+      actions.appendChild(btn);
+    });
+  }
+
+  const fullStaminaCard = document.querySelector('.card[data-merch-id="10"]');
+
+  if (fullStaminaCard) {
+    const actions = fullStaminaCard.querySelector(".actions");
+
+    // Prevent duplicate injection
+    if (!actions.querySelector(".qty-wrap")) {
+      const qtyWrap = document.createElement("div");
+      qtyWrap.className = "qty-wrap";
+      qtyWrap.setAttribute("aria-label", "Quantity");
+
+      qtyWrap.innerHTML = `
+      <button type="button" class="qty-btn minus" tabindex="-1">−</button>
+      <input type="number"
+             class="qty-input"
+             min="1"
+             step="1"
+             value="1"
+             inputmode="numeric"
+             pattern="[0-9]*"
+             aria-label="Quantity">
+      <button type="button" class="qty-btn plus" tabindex="-1">+</button>
+    `;
+
+      // Insert before Buy button
+      actions.prepend(qtyWrap);
+    }
+  }
+
+  injectBuyX();
+
+  // ---------------------------- Merchant ----------------------------- //
 })();

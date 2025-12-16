@@ -32,6 +32,9 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
 - Battlepass
   - all 3 tiers are now linked when scrolling
   - auto scrolls to current level of battlepass.
+- Merchant
+  - Adds a buy {max} button to each item in stock so you can buy the max available
+  - Adds a quantity input box for purchase of FSP using gems
 
 ---
 
