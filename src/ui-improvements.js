@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.6
+// @version      1.0.7
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @match        https://demonicscans.org/*
@@ -33,6 +33,13 @@
   // ===============================
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function getCookie(name) {
+    return document.cookie
+      .split("; ")
+      .find((c) => c.startsWith(name + "="))
+      ?.split("=")[1];
   }
 
   function addMenuLinkAfter(afterLabel, newUrl, newTitle, newIcon = "✨") {
@@ -205,6 +212,9 @@
   // -------------------------- Wave X Page ---------------------------- //
   if (window.location.href.includes("/active_wave.php")) {
     let inBattleCount = 0;
+    const hideDeadRaw = getCookie("hide_dead_monsters");
+    const HIDE_DEAD_MONSTERS = hideDeadRaw === "1" || hideDeadRaw === "true";
+
     function overrideLootX() {
       const btnLootX = document.getElementById("btnLootX");
       if (btnLootX) {
@@ -295,7 +305,7 @@
           joinedCount++;
         }
       });
-      return joinedCount;
+      return HIDE_DEAD_MONSTERS ? joinedCount : "??";
     };
 
     inBattleCount = calculateInBattle();
@@ -304,8 +314,13 @@
     const blLeft = document.querySelector(".bl-left");
     if (blLeft) {
       const inBattleDiv = document.createElement("div");
+      const count = document.createElement("span");
+      count.className = "count";
+      count.id = "in-battle-count";
+      count.textContent = inBattleCount.toString();
       inBattleDiv.className = "unclaimed-pill";
-      inBattleDiv.textContent = `In Battle: ${inBattleCount}`;
+      inBattleDiv.textContent = `💪 In Battle:`;
+      inBattleDiv.appendChild(count);
       blLeft.appendChild(inBattleDiv);
     }
     // --------- In Battle Count Injection End ---------//
