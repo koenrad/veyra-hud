@@ -30,6 +30,11 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
 - Wave Page
   - Modified `Loot X monsters` feature to be _significantly_ faster
   - Adds `In Battle:` count to show how many battles you are currently in.
+  - Adds `Attack Strategy` to the multi target menu.
+  - Adds a `Settings` button for `Attack Stragegy`.
+    - Enter a valid JSON array for your attack strategy.
+    - Valid strings: [ "slash", "power slash", "heroic slash", "legendary slash", "ultimate slash" ]
+    - e.g.: [ "heroic slash", "power slash", "power slash", "slash","slash" ] - performs in order consuming 72 stamina
 - Battlepass
   - all 3 tiers are now linked when scrolling
   - auto scrolls to current level of battlepass.

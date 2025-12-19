@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.7
+// @version      1.0.8
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @match        https://demonicscans.org/*
@@ -41,6 +41,33 @@
       .find((c) => c.startsWith(name + "="))
       ?.split("=")[1];
   }
+
+  const Storage = {
+    get(key, fallback = null) {
+      try {
+        const value = localStorage.getItem(key);
+        return value !== null ? JSON.parse(value) : fallback;
+      } catch {
+        return fallback;
+      }
+    },
+
+    set(key, value) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch {}
+    },
+
+    remove(key) {
+      try {
+        localStorage.removeItem(key);
+      } catch {}
+    },
+
+    has(key) {
+      return localStorage.getItem(key) !== null;
+    },
+  };
 
   function addMenuLinkAfter(afterLabel, newUrl, newTitle, newIcon = "✨") {
     // Find the anchor with the matching label text
@@ -205,10 +232,12 @@
 
   // -------------------------- Wave X Page ---------------------------- //
   if (window.location.href.includes("/active_wave.php")) {
+    // ---------------- constants ------------------ //
     let inBattleCount = 0;
     const hideDeadRaw = getCookie("hide_dead_monsters");
     const HIDE_DEAD_MONSTERS = hideDeadRaw === "1" || hideDeadRaw === "true";
 
+    // -------------- Loot X Faster ---------------- //
     function overrideLootX() {
       const btnLootX = document.getElementById("btnLootX");
       if (btnLootX) {
@@ -288,7 +317,10 @@
         });
       }
     }
+    overrideLootX();
+    // -------------- Loot X Faster ---------------- //
 
+    // --------- In Battle Count Injection ------------//
     const calculateInBattle = () => {
       const monsterCards = document.querySelectorAll(".monster-card");
 
@@ -304,7 +336,6 @@
 
     inBattleCount = calculateInBattle();
 
-    // --------- In Battle Count Injection ------------//
     const blLeft = document.querySelector(".bl-left");
     if (blLeft) {
       const inBattleDiv = document.createElement("div");
@@ -319,9 +350,409 @@
     }
     // --------- In Battle Count Injection End ---------//
 
-    overrideLootX();
-  }
+    // ------------- Custom Attack Strategy ------------//
 
+    const JOIN_URL = ENDPOINTS && ENDPOINTS.JOIN ? ENDPOINTS.JOIN : "";
+    const ATTACK_URL = ENDPOINTS && ENDPOINTS.ATTACK ? ENDPOINTS.ATTACK : "";
+
+    let attackStrategy = Storage.get("ui-improvements:attackStrategy", []);
+
+    const Skills = Object.freeze({
+      slash: { id: "-0", cost: 1 },
+      "power slash": { id: "-1", cost: 10 },
+      "heroic slash": { id: "-2", cost: 50 },
+      "legendary slash": { id: "-3", cost: 100 },
+      "ultimate slash": { id: "-4", cost: 200 },
+    });
+
+    function escapeHtml(s) {
+      return String(s || "").replace(
+        /[&<>"']/g,
+        (m) =>
+          ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;",
+          }[m])
+      );
+    }
+
+    function normalizeOk(r) {
+      const raw = String(r?.raw || "");
+      const d = r?.data || {};
+
+      const ok =
+        d.status === "success" ||
+        d.ok === true ||
+        d.success === true ||
+        /^\s*success\s*$/i.test(raw) ||
+        /joined|already joined/i.test(raw);
+
+      const msg =
+        typeof d.message === "string" && d.message.trim()
+          ? d.message
+          : typeof d.error === "string" && d.error.trim()
+          ? d.error
+          : raw || (ok ? "OK" : "Failed");
+
+      return { ok, msg, data: d, raw };
+    }
+
+    function openBatchAttackModal(results) {
+      const ok = results.filter((r) => r.attackOk).length;
+      const fail = results.length - ok;
+
+      const sum = document.getElementById("bamSummary");
+      const list = document.getElementById("bamList");
+
+      if (sum)
+        sum.textContent = `Processed: ${results.length} | Success: ${ok} | Failed: ${fail}`;
+      if (list) {
+        list.innerHTML = results
+          .map((r) => {
+            const color = r.attackOk ? "#7CFFB8" : "#ff6b6b";
+            const border = r.attackOk
+              ? "rgba(0,255,140,.25)"
+              : "rgba(255,0,80,.25)";
+            return `
+          <div style="background:#1e1e2f;border:1px solid ${border};border-radius:10px;padding:10px 12px;">
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+              <div style="font-weight:700;color:#e6e9ff;">
+                #${r.monsterId}
+              </div>
+              <div style="font-weight:800;color:${color};">
+                ${r.attackOk ? "✅ OK" : "❌ FAIL"}
+              </div>
+            </div>
+            <div style="margin-top:6px;color:#9aa0be;font-size:12px;line-height:1.45;">
+              ${r.joinMsg ? `Join: ${escapeHtml(r.joinMsg)}<br>` : ""}
+              Attack: ${escapeHtml(r.attackMsg || "")}
+            </div>
+          </div>
+        `;
+          })
+          .join("");
+      }
+
+      document.getElementById("batchAttackModal").style.display = "flex";
+    }
+
+    function showStatus(t) {
+      const statusEl = document.getElementById("batchAttackStatus");
+      if (!statusEl) return;
+      statusEl.innerHTML = t || "";
+    }
+
+    function setQuickBtnsRunning(running) {
+      const quickBtns = Array.from(
+        document.querySelectorAll(".btnQuickJoinAttack")
+      );
+      quickBtns.forEach((b) => {
+        b.disabled = running;
+        b.style.opacity = running ? "0.7" : "";
+      });
+    }
+
+    async function performAttackStrat(monsterId, attackStrat) {
+      const results = [];
+
+      for (const skillName of attackStrat) {
+        const skill = Skills[skillName.toLowerCase()];
+
+        if (!skill) {
+          results.push({
+            skill: skillName,
+            ok: false,
+            msg: `Unknown skill: ${skillName}`,
+          });
+          continue;
+        }
+
+        try {
+          const res = await doAttack(
+            monsterId,
+            parseInt(skill.id, 10),
+            skill.cost
+          );
+
+          results.push({
+            skill: skillName,
+            ok: !!res.ok,
+            msg:
+              res.msg ||
+              (res.ok
+                ? `Attacked with ${skillName}`
+                : `Attack failed with ${skillName}`),
+          });
+
+          if (!res.ok) break; // stop strategy on failure
+        } catch (e) {
+          results.push({
+            skill: skillName,
+            ok: false,
+            msg: `Attack request failed (${skillName})`,
+          });
+          break;
+        }
+
+        await new Promise((r) => setTimeout(r, 120));
+      }
+
+      return results;
+    }
+
+    function getSelectedMonsterIds() {
+      return Array.from(document.querySelectorAll(".pickMonster:checked"))
+        .map((cb) => parseInt(cb.dataset.mid || "0", 10))
+        .filter(Boolean);
+    }
+
+    async function doJoin(monsterId) {
+      if (!JOIN_URL) return { ok: false, msg: "Join endpoint not set" };
+      if (!USER_ID) return { ok: false, msg: "Missing USER_ID" };
+
+      // ✅ user_join_battle.php expects POST monster_id + user_id
+      const r = await postForm(JOIN_URL, {
+        monster_id: monsterId,
+        user_id: USER_ID,
+      });
+
+      const n = normalizeOk(r);
+      return { ok: n.ok, msg: n.msg, data: n.data, raw: n.raw };
+    }
+
+    async function doAttack(monsterId, skillId, stam) {
+      if (!ATTACK_URL) return { ok: false, msg: "Attack endpoint not set" };
+
+      // ✅ damage.php expects POST monster_id + skill_id
+      const payload = {
+        monster_id: monsterId,
+        skill_id: skillId,
+        stamina_cost: stam,
+      };
+
+      const r = await postForm(ATTACK_URL, payload);
+      const n = normalizeOk(r);
+      const msg =
+        n.msg || (n.ok ? `Attacked (${stam})` : `Attack failed (${stam})`);
+      return { ok: n.ok, msg: n.msg, data: n.data, raw: n.raw };
+    }
+
+    async function postForm(url, payload) {
+      const fd = new FormData();
+      Object.entries(payload || {}).forEach(([k, v]) => fd.append(k, v));
+
+      const res = await fetch(url, {
+        method: "POST",
+        body: fd,
+        credentials: "same-origin",
+      });
+      const txt = await res.text();
+
+      try {
+        return { ok: res.ok, data: JSON.parse(txt), raw: txt };
+      } catch (_e) {
+        return { ok: res.ok, data: null, raw: txt };
+      }
+    }
+
+    function openAttackSettingsModal() {
+      // Prevent duplicate modal
+      if (document.getElementById("attackStratModal")) return;
+
+      const overlay = document.createElement("div");
+      overlay.id = "attackStratModal";
+      overlay.style.cssText = `
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.6);
+    z-index:9999;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  `;
+
+      const modal = document.createElement("div");
+      modal.style.cssText = `
+    background:#1f2233;
+    padding:16px;
+    border-radius:8px;
+    width:420px;
+    color:#e6e8ff;
+    box-shadow:0 10px 30px rgba(0,0,0,.4);
+  `;
+
+      modal.innerHTML = `
+    <h3 style="margin:0 0 8px;">🧠 Attack Strategy</h3>
+    <p style="font-size:12px;color:#9aa0be;margin-bottom:8px;">
+      Enter a JSON array of skill names for your attack strategy.
+    </p>
+    <p style="font-size:12px;color:#9aa0be;margin-bottom:8px;">
+      example: ["slash","power slash","heroic slash","legendary slash","ultimate slash"]
+    </p>
+    <textarea
+      id="attackStratInput"
+      style="
+        width:100%;
+        height:90px;
+        background:#151728;
+        color:#fff;
+        border:1px solid #2d3154;
+        border-radius:4px;
+        padding:6px;
+        resize:vertical;
+        font-family:monospace;
+        font-size:12px;
+      "
+    ></textarea>
+    <div style="margin-top:12px;text-align:right;">
+      <button class="btn" id="attackStratClose">Close</button>
+    </div>
+  `;
+
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+
+      const input = modal.querySelector("#attackStratInput");
+
+      // Load existing value if present
+      try {
+        const existing = Storage.get("ui-improvements:attackStrategy", []);
+        if (existing) {
+          input.value = JSON.stringify(existing);
+        }
+      } catch {}
+
+      // Save on change
+      input.addEventListener("input", () => {
+        try {
+          attackStrategy = JSON.parse(input.value);
+          Storage.set("ui-improvements:attackStrategy", attackStrategy);
+          input.style.borderColor = "#22c55e"; // green = valid
+        } catch (e) {
+          input.style.borderColor = "#ef4444"; // red = invalid
+        }
+      });
+
+      // Close handlers
+      overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) overlay.remove();
+      });
+
+      modal
+        .querySelector("#attackStratClose")
+        .addEventListener("click", () => overlay.remove());
+    }
+
+    (function injectAttackSettings() {
+      const actions = document.querySelector(".qol-select-actions");
+      if (!actions) return;
+
+      // Prevent duplicates
+      if (actions.querySelector(".btnAttackSettings")) return;
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btnAttackSettings";
+      btn.textContent = "⚙️ Settings";
+
+      actions.appendChild(btn);
+
+      btn.addEventListener("click", openAttackSettingsModal);
+    })();
+
+    (function injectAttackStratButton() {
+      const attacksWrap = document.querySelector(".qol-attacks");
+      if (!attacksWrap) return;
+
+      // Prevent duplicate injection
+      if (attacksWrap.querySelector(".btnAttackStrat")) return;
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btnAttackStrat";
+      btn.textContent = "🧠 Attack using Strategy";
+
+      // Match styling but distinguish it
+      btn.style.background = "#7c3aed";
+      btn.style.borderColor = "#7c3aed";
+
+      attacksWrap.appendChild(btn);
+
+      btn.addEventListener("click", async () => {
+        const ids = getSelectedMonsterIds();
+        if (!ids.length) {
+          showStatus("Select at least 1 monster.");
+          return;
+        }
+
+        if (!JOIN_URL || !ATTACK_URL) {
+          showStatus("Quick Join/Attack endpoints are not configured.");
+          return;
+        }
+
+        setQuickBtnsRunning(true);
+        showStatus(`Running attack strategy on ${ids.length} monsters...`);
+
+        const results = [];
+
+        for (let i = 0; i < ids.length; i++) {
+          const id = ids[i];
+          showStatus(
+            `(${i + 1}/${ids.length}) Strategy attacking monster #${id}...`
+          );
+
+          const card = document.querySelector(
+            `.monster-card[data-monster-id="${id}"]`
+          );
+
+          const alreadyJoined = card && card.dataset.joined === "1";
+
+          let joinRes = { ok: true, msg: "" };
+
+          if (!alreadyJoined) {
+            try {
+              joinRes = await doJoin(id);
+            } catch {
+              joinRes = { ok: false, msg: "Join request failed" };
+            }
+          }
+
+          if (!joinRes.ok) {
+            results.push({
+              monsterId: id,
+              joinMsg: joinRes.msg,
+              attackOk: false,
+              attackMsg: "Skipped (join failed)",
+            });
+            continue;
+          }
+
+          if (card) {
+            card.dataset.joined = "1";
+            card.dataset.unjoined = "0";
+          }
+
+          const atkResults = await performAttackStrat(id, attackStrategy);
+
+          results.push({
+            monsterId: id,
+            joinMsg: joinRes.msg,
+            attackOk: atkResults.every((r) => r.ok),
+            attackMsg: atkResults.map((r) => r.msg).join(" | "),
+          });
+        }
+
+        showStatus("Strategy complete.");
+        setQuickBtnsRunning(false);
+        openBatchAttackModal(results);
+      });
+    })();
+
+    // ------------- Custom Attack Strategy ------------//
+  }
   // -------------------------- Wave X Page ---------------------------- //
 
   // ---------------------------- Merchant ----------------------------- //
