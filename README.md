@@ -21,8 +21,8 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
 ### ui-improvements.js
 
 - Menu modifications
-  - moves halloween event to bottom of menu (event is currently over)
-  - adds Lizardman Winter event link to nav bar
+  - ~~moves halloween event to bottom of menu (event is currently over)~~ This link was finally removed in vanilla.
+  - ~~adds Lizardman Winter event link to nav bar~~ This is now on vanilla.
   - adds link to Wave 3
   - adds link to Adventurer's Guild
   - adds link to Legendary Forge

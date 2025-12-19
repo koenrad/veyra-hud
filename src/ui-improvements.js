@@ -104,12 +104,6 @@
       "Legendary Forge",
       "🔥"
     );
-    addMenuLinkAfter(
-      "Home",
-      "/a_lizardmen_winter.php",
-      "Lizardmen's Winter",
-      "🎄"
-    );
   }
   // -------------------- Menu Sidebar / Navigation -------------------- //
 
