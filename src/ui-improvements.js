@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.5
+// @version      1.0.6
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @match        https://demonicscans.org/*
@@ -203,87 +203,116 @@
   // ------------------------ Battle Pass Page ------------------------- //
 
   // -------------------------- Wave X Page ---------------------------- //
-  function overrideLootX() {
-    const btnLootX = document.getElementById("btnLootX");
-    if (btnLootX) {
-      const customBtn = document.createElement("button");
-      customBtn.id = "btnCustomLoot";
-      customBtn.type = "button";
-      customBtn.className = "custom-loot-btn";
-      customBtn.textContent = "💰 Loot X monsters (faster)";
+  if (window.location.href.includes("/active_wave.php")) {
+    let inBattleCount = 0;
+    function overrideLootX() {
+      const btnLootX = document.getElementById("btnLootX");
+      if (btnLootX) {
+        const customBtn = document.createElement("button");
+        customBtn.id = "btnCustomLoot";
+        customBtn.type = "button";
+        customBtn.className = "custom-loot-btn";
+        customBtn.textContent = "💰 Loot X monsters (faster)";
 
-      btnLootX.insertAdjacentElement("afterend", customBtn);
-      btnLootX.style.display = "none";
+        btnLootX.insertAdjacentElement("afterend", customBtn);
+        btnLootX.style.display = "none";
 
-      customBtn?.addEventListener("click", async () => {
-        const n = Math.max(1, parseInt($input.value || "1", 10));
-        const eligibleEls = Array.from(
-          document.querySelectorAll('.monster-card[data-eligible="1"]')
-        );
-        const targetIds = eligibleEls
-          .slice(0, n)
-          .map((el) => parseInt(el.dataset.monsterId, 10))
-          .filter(Boolean);
+        customBtn?.addEventListener("click", async () => {
+          const n = Math.max(1, parseInt($input.value || "1", 10));
+          const eligibleEls = Array.from(
+            document.querySelectorAll('.monster-card[data-eligible="1"]')
+          );
+          const targetIds = eligibleEls
+            .slice(0, n)
+            .map((el) => parseInt(el.dataset.monsterId, 10))
+            .filter(Boolean);
 
-        if (targetIds.length === 0) {
-          $stat.textContent = "No eligible dead monsters you joined.";
-          return;
-        }
-
-        setRunning(true);
-        let ok = 0,
-          fail = 0;
-        let totalExp = 0,
-          totalGold = 0;
-        const allItems = [];
-        const allNotes = [];
-        for (let i = 0; i < targetIds.length; i++) {
-          $stat.textContent = `Looting ${i + 1}/${
-            targetIds.length
-          }... (success: ${ok}, fail: ${fail})`;
-          try {
-            const res = await lootOne(targetIds[i]);
-            if (res.ok) {
-              ok++;
-              totalExp += res.exp;
-              totalGold += res.gold;
-              if (res.items?.length) {
-                allItems.push(...res.items);
-              } else if (res.note) {
-                allNotes.push(res.note);
-              }
-              const el = document.querySelector(
-                `.monster-card[data-monster-id="${targetIds[i]}"]`
-              );
-              if (el) el.setAttribute("data-eligible", "0");
-            } else {
-              fail++;
-              if (res.note) allNotes.push(res.note);
-            }
-          } catch (_e) {
-            fail++;
-            allNotes.push("Server error");
+          if (targetIds.length === 0) {
+            $stat.textContent = "No eligible dead monsters you joined.";
+            return;
           }
-          // await new Promise((r) => setTimeout(r, 150));
-        }
-        $stat.textContent = `Done. Looted ${ok}, failed ${fail}.`;
-        setRunning(false);
-        openBatchLootModal(
-          {
-            processed: targetIds.length,
-            success: ok,
-            fail,
-            exp: totalExp,
-            gold: totalGold,
-          },
-          allItems,
-          allNotes
-        );
-      });
+
+          setRunning(true);
+          let ok = 0,
+            fail = 0;
+          let totalExp = 0,
+            totalGold = 0;
+          const allItems = [];
+          const allNotes = [];
+          for (let i = 0; i < targetIds.length; i++) {
+            $stat.textContent = `Looting ${i + 1}/${
+              targetIds.length
+            }... (success: ${ok}, fail: ${fail})`;
+            try {
+              const res = await lootOne(targetIds[i]);
+              if (res.ok) {
+                ok++;
+                totalExp += res.exp;
+                totalGold += res.gold;
+                if (res.items?.length) {
+                  allItems.push(...res.items);
+                } else if (res.note) {
+                  allNotes.push(res.note);
+                }
+                const el = document.querySelector(
+                  `.monster-card[data-monster-id="${targetIds[i]}"]`
+                );
+                if (el) el.setAttribute("data-eligible", "0");
+              } else {
+                fail++;
+                if (res.note) allNotes.push(res.note);
+              }
+            } catch (_e) {
+              fail++;
+              allNotes.push("Server error");
+            }
+            // await new Promise((r) => setTimeout(r, 150));
+          }
+          $stat.textContent = `Done. Looted ${ok}, failed ${fail}.`;
+          setRunning(false);
+          openBatchLootModal(
+            {
+              processed: targetIds.length,
+              success: ok,
+              fail,
+              exp: totalExp,
+              gold: totalGold,
+            },
+            allItems,
+            allNotes
+          );
+        });
+      }
     }
+
+    const calculateInBattle = () => {
+      const monsterCards = document.querySelectorAll(".monster-card");
+
+      let joinedCount = 0;
+
+      monsterCards.forEach((card) => {
+        if (card.dataset.joined === "1") {
+          joinedCount++;
+        }
+      });
+      return joinedCount;
+    };
+
+    inBattleCount = calculateInBattle();
+
+    // --------- In Battle Count Injection ------------//
+    const blLeft = document.querySelector(".bl-left");
+    if (blLeft) {
+      const inBattleDiv = document.createElement("div");
+      inBattleDiv.className = "unclaimed-pill";
+      inBattleDiv.textContent = `In Battle: ${inBattleCount}`;
+      blLeft.appendChild(inBattleDiv);
+    }
+    // --------- In Battle Count Injection End ---------//
+
+    overrideLootX();
   }
 
-  overrideLootX();
   // -------------------------- Wave X Page ---------------------------- //
 
   // ---------------------------- Merchant ----------------------------- //

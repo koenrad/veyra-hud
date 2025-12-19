@@ -29,6 +29,7 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
   - fairly easy to add custom links using `addMenuLinkAfter`
 - Wave Page
   - Modified `Loot X monsters` feature to be _significantly_ faster
+  - Adds `In Battle:` count to show how many battles you are currently in.
 - Battlepass
   - all 3 tiers are now linked when scrolling
   - auto scrolls to current level of battlepass.
