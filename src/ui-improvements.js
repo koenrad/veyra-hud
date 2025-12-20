@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.9
+// @version      1.0.10
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @match        https://demonicscans.org/*
@@ -357,6 +357,118 @@
 
     let attackStrategy = Storage.get("ui-improvements:attackStrategy", []);
 
+    GM_addStyle(`
+      .attack-strat-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.6);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .attack-strat-modal {
+        background: #1f2233;
+        padding: 16px;
+        border-radius: 8px;
+        width: 470px;
+        margin: 5px;
+        color: #e6e8ff;
+        box-shadow: 0 10px 30px rgba(0,0,0,.4);
+      }
+
+      .attack-strat-title {
+        margin: 0 0 10px;
+      }
+
+      .attack-strat-picker {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+
+      .attack-strat-label {
+        font-size: 12px;
+        color: #9aa0be;
+        margin-bottom: 6px;
+      }
+
+      .attack-strat-chips {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .attack-strat-meta {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #9aa0be;
+      }
+
+      .attack-strat-footer {
+        margin-top: 14px;
+        text-align: right;
+      }
+
+      .attack-strat-chip {
+        display: flex;
+        align-items: center;
+        background: #2d3154;
+        padding: 6px 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      .attack-strat-chip-label {
+        flex: 1;
+        text-transform: capitalize;
+      }
+
+      .attack-strat-chip-controls {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .attack-strat-chip-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #9aa0be;
+        font-size: 12px;
+        padding: 5px 15px;
+        background-color: #1f2233;
+        border-radius:5px
+      }
+
+      .attack-strat-chip-remove {
+        color: #ef4444;
+      }
+
+      .attack-strat-chip-btn.is-disabled {
+        opacity: 0.3;
+        pointer-events: none;
+      }
+
+      .attack-strat-skill-btn {
+        font-size: 12px;
+        padding: 4px 8px;
+        background: #151728;
+        border-color: #2d3154;
+        text-transform: capitalize;
+      }
+      .total-stam-cost {
+        color: #FFD369;
+        font-weight: 700;
+        text-shadow: 0 0 6px rgba(255, 211, 105, .6);
+      }
+
+      `);
+
     const Skills = Object.freeze({
       slash: { id: "-0", cost: 1 },
       "power slash": { id: "-1", cost: 10 },
@@ -567,87 +679,34 @@
     }
 
     function openAttackSettingsModal() {
-      // Prevent duplicate modal
       if (document.getElementById("attackStratModal")) return;
 
       const overlay = document.createElement("div");
       overlay.id = "attackStratModal";
-      overlay.style.cssText = `
-    position:fixed;
-    inset:0;
-    background:rgba(0,0,0,0.6);
-    z-index:9999;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-  `;
+      overlay.className = "attack-strat-overlay";
 
       const modal = document.createElement("div");
-      modal.style.cssText = `
-    background:#1f2233;
-    padding:16px;
-    border-radius:8px;
-    width:420px;
-    color:#e6e8ff;
-    box-shadow:0 10px 30px rgba(0,0,0,.4);
-  `;
+      modal.className = "attack-strat-modal";
 
       modal.innerHTML = `
-    <h3 style="margin:0 0 8px;">🧠 Attack Strategy</h3>
-    <p style="font-size:12px;color:#9aa0be;margin-bottom:8px;">
-      Enter a JSON array of skill names for your attack strategy.
-    </p>
-    <p style="font-size:12px;color:#9aa0be;margin-bottom:8px;">
-      example: ["slash","power slash","heroic slash","legendary slash","ultimate slash"]
-    </p>
-    <textarea
-      id="attackStratInput"
-      style="
-        width:100%;
-        height:90px;
-        background:#151728;
-        color:#fff;
-        border:1px solid #2d3154;
-        border-radius:4px;
-        padding:6px;
-        resize:vertical;
-        font-family:monospace;
-        font-size:12px;
-      "
-    ></textarea>
-    <div style="margin-top:12px;text-align:right;">
-      <button class="btn" id="attackStratClose">Close</button>
+    <h3 class="attack-strat-title">🧠 Attack Strategy Builder</h3>
+
+    <div id="skillPicker" class="attack-strat-picker"></div>
+
+    <div class="attack-strat-label">Strategy order:</div>
+
+    <div id="strategyChips" class="attack-strat-chips"></div>
+
+    <div id="strategyMeta" class="attack-strat-meta"></div>
+
+    <div class="attack-strat-footer">
+      <button class="btn attack-strat-close" id="attackStratClose">Close</button>
     </div>
   `;
 
       overlay.appendChild(modal);
       document.body.appendChild(overlay);
 
-      const input = modal.querySelector("#attackStratInput");
-
-      // Load existing value if present
-      try {
-        const existing = Storage.get("ui-improvements:attackStrategy", []);
-        if (existing) {
-          input.value = JSON.stringify(existing);
-        }
-      } catch {}
-
-      // Save on change
-      input.addEventListener("input", () => {
-        try {
-          attackStrategy = JSON.parse(input.value);
-          Storage.set("ui-improvements:attackStrategy", attackStrategy);
-          input.style.borderColor = "#22c55e"; // green = valid
-          strategyAttackBtn.textContent = `🧠 Quick Join & Attack (${getAttackStrategyCost(
-            attackStrategy
-          )})`;
-        } catch (e) {
-          input.style.borderColor = "#ef4444"; // red = invalid
-        }
-      });
-
-      // Close handlers
       overlay.addEventListener("click", (e) => {
         if (e.target === overlay) overlay.remove();
       });
@@ -655,6 +714,114 @@
       modal
         .querySelector("#attackStratClose")
         .addEventListener("click", () => overlay.remove());
+
+      const picker = modal.querySelector("#skillPicker");
+      const chipsWrap = modal.querySelector("#strategyChips");
+      const meta = modal.querySelector("#strategyMeta");
+
+      // attackStrategy = Storage.get("ui-improvements:attackStrategy") || [];
+
+      // ---------- Helpers ----------
+      function save() {
+        Storage.set("ui-improvements:attackStrategy", attackStrategy);
+        strategyAttackBtn.textContent = `🧠 Quick Join & Attack (${getAttackStrategyCost(
+          attackStrategy
+        )})`;
+        renderMeta();
+      }
+
+      function renderMeta() {
+        const total = getAttackStrategyCost(attackStrategy);
+        const totalEl = document.createElement("span");
+        totalEl.className = "total-stam-cost";
+        totalEl.textContent = total.toString();
+        meta.textContent = `Total stamina cost: `;
+        meta.appendChild(totalEl);
+      }
+
+      function renderStrategy() {
+        chipsWrap.innerHTML = "";
+
+        attackStrategy.forEach((skill, index) => {
+          const chip = document.createElement("div");
+          chip.className = "attack-strat-chip";
+
+          const label = document.createElement("span");
+          label.className = "attack-strat-chip-label";
+          label.textContent = skill;
+
+          const controls = document.createElement("div");
+          controls.className = "attack-strat-chip-controls";
+
+          const up = document.createElement("button");
+          up.className = "attack-strat-chip-btn attack-strat-chip-up";
+          up.textContent = "↑";
+          up.title = "Move up";
+
+          const down = document.createElement("button");
+          down.className = "attack-strat-chip-btn attack-strat-chip-down";
+          down.textContent = "↓";
+          down.title = "Move down";
+
+          const remove = document.createElement("button");
+          remove.className = "attack-strat-chip-btn attack-strat-chip-remove";
+          remove.textContent = "✕";
+          remove.title = "Remove";
+
+          if (index === 0) up.classList.add("is-disabled");
+          if (index === attackStrategy.length - 1)
+            down.classList.add("is-disabled");
+
+          up.onclick = () => {
+            if (index === 0) return;
+            [attackStrategy[index - 1], attackStrategy[index]] = [
+              attackStrategy[index],
+              attackStrategy[index - 1],
+            ];
+            save();
+            renderStrategy();
+          };
+
+          down.onclick = () => {
+            if (index === attackStrategy.length - 1) return;
+            [attackStrategy[index + 1], attackStrategy[index]] = [
+              attackStrategy[index],
+              attackStrategy[index + 1],
+            ];
+            save();
+            renderStrategy();
+          };
+
+          remove.onclick = () => {
+            attackStrategy.splice(index, 1);
+            save();
+            renderStrategy();
+          };
+
+          controls.append(up, down, remove);
+          chip.append(label, controls);
+          chipsWrap.appendChild(chip);
+        });
+
+        renderMeta();
+      }
+
+      // ---------- Skill Picker ----------
+      Object.keys(Skills).forEach((skillName) => {
+        const btn = document.createElement("button");
+        btn.className = "btn attack-strat-skill-btn";
+        btn.textContent = skillName;
+
+        btn.onclick = () => {
+          attackStrategy.push(skillName);
+          save();
+          renderStrategy();
+        };
+
+        picker.appendChild(btn);
+      });
+
+      renderStrategy();
     }
 
     (function injectAttackSettings() {
@@ -667,7 +834,7 @@
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "btn btnAttackSettings";
-      btn.textContent = "⚙️ Settings";
+      btn.textContent = "⚙️ 🧠 Settings";
 
       actions.appendChild(btn);
 
