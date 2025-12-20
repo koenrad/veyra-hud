@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.10
+// @version      1.0.11
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @match        https://demonicscans.org/*
@@ -466,6 +466,32 @@
         font-weight: 700;
         text-shadow: 0 0 6px rgba(255, 211, 105, .6);
       }
+      .attack-strat-asterion {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 6px;
+        font-size: 12px;
+        color: #9aa0be;
+      }
+
+      .attack-strat-checkbox {
+        width: 16px;
+        height: 16px;
+      }
+
+      .attack-strat-asterion-label {
+        cursor: pointer;
+      }
+
+      .attack-strat-asterion-input {
+        width: 60px;
+        padding: 2px 4px;
+        border-radius: 4px;
+        border: 1px solid #2d3154;
+        background: #2d3154;
+        color: #e6e8ff;
+      }
 
       `);
 
@@ -493,9 +519,16 @@
     function getAttackStrategyCost(strategy = []) {
       if (!Array.isArray(strategy)) return 0;
 
+      // Get asterion settings from storage
+      const useAsterion = Storage.get("ui-improvements:useAsterion") || false;
+      const asterionValue =
+        parseFloat(Storage.get("ui-improvements:asterionValue")) || 1;
+
       return strategy.reduce((total, skillName) => {
-        const skill = Skills[skillName.toLowerCase()];
-        return total + (skill?.cost || 0);
+        const skill = Skills[skillName];
+        let cost = skill?.cost || 0;
+        if (useAsterion) cost = Math.ceil(cost * asterionValue);
+        return total + cost;
       }, 0);
     }
 
@@ -617,7 +650,7 @@
           break;
         }
 
-        await new Promise((r) => setTimeout(r, 120));
+        // await new Promise((r) => setTimeout(r, 120));
       }
 
       return results;
@@ -719,11 +752,17 @@
       const chipsWrap = modal.querySelector("#strategyChips");
       const meta = modal.querySelector("#strategyMeta");
 
-      // attackStrategy = Storage.get("ui-improvements:attackStrategy") || [];
+      // Load strategy and asterion multiplier from localStorage
+      let useAsterion = Storage.get("ui-improvements:useAsterion") || false;
+      let asterionValue = parseFloat(
+        Storage.get("ui-improvements:asterionValue") || 1
+      );
 
       // ---------- Helpers ----------
       function save() {
         Storage.set("ui-improvements:attackStrategy", attackStrategy);
+        Storage.set("ui-improvements:useAsterion", useAsterion);
+        Storage.set("ui-improvements:asterionValue", asterionValue);
         strategyAttackBtn.textContent = `🧠 Quick Join & Attack (${getAttackStrategyCost(
           attackStrategy
         )})`;
@@ -731,12 +770,58 @@
       }
 
       function renderMeta() {
-        const total = getAttackStrategyCost(attackStrategy);
-        const totalEl = document.createElement("span");
-        totalEl.className = "total-stam-cost";
-        totalEl.textContent = total.toString();
-        meta.textContent = `Total stamina cost: `;
-        meta.appendChild(totalEl);
+        let total = getAttackStrategyCost(attackStrategy);
+
+        meta.innerHTML = `Total stamina cost: <span class="total-stam-cost">${total}</span>`;
+
+        // ----------  Use Asterion ----------
+        let asterionContainer = document.getElementById("asterionContainer");
+        if (!asterionContainer) {
+          asterionContainer = document.createElement("div");
+          asterionContainer.id = "asterionContainer";
+          asterionContainer.className = "attack-strat-asterion";
+
+          // Checkbox container
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.id = "useAsterionCheckbox";
+          checkbox.checked = useAsterion;
+          checkbox.className = "attack-strat-checkbox";
+
+          const label = document.createElement("label");
+          label.htmlFor = "useAsterionCheckbox";
+          label.className = "attack-strat-asterion-label";
+          label.textContent = "Calculate Using Asterion";
+
+          // Number input
+          const input = document.createElement("input");
+          input.type = "number";
+          input.min = "0";
+          input.step = 0.001;
+          input.value = asterionValue.toString();
+          input.id = "asterionInput";
+          input.className = "attack-strat-asterion-input";
+          input.style.display = useAsterion ? "inline-block" : "none";
+
+          checkbox.addEventListener("change", () => {
+            useAsterion = checkbox.checked;
+            input.style.display = useAsterion ? "inline-block" : "none";
+            save();
+          });
+
+          input.addEventListener("change", () => {
+            let val = parseFloat(input.value);
+            if (isNaN(val) || val <= 0) val = 1;
+            asterionValue = +val.toFixed(3);
+            save();
+          });
+
+          asterionContainer.appendChild(checkbox);
+          asterionContainer.appendChild(label);
+          asterionContainer.appendChild(input);
+
+          meta.appendChild(asterionContainer);
+        }
       }
 
       function renderStrategy() {
