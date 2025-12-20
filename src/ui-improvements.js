@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.8
+// @version      1.0.9
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @match        https://demonicscans.org/*
@@ -378,6 +378,14 @@
           }[m])
       );
     }
+    function getAttackStrategyCost(strategy = []) {
+      if (!Array.isArray(strategy)) return 0;
+
+      return strategy.reduce((total, skillName) => {
+        const skill = Skills[skillName.toLowerCase()];
+        return total + (skill?.cost || 0);
+      }, 0);
+    }
 
     function normalizeOk(r) {
       const raw = String(r?.raw || "");
@@ -631,6 +639,9 @@
           attackStrategy = JSON.parse(input.value);
           Storage.set("ui-improvements:attackStrategy", attackStrategy);
           input.style.borderColor = "#22c55e"; // green = valid
+          strategyAttackBtn.textContent = `🧠 Quick Join & Attack (${getAttackStrategyCost(
+            attackStrategy
+          )})`;
         } catch (e) {
           input.style.borderColor = "#ef4444"; // red = invalid
         }
@@ -663,6 +674,8 @@
       btn.addEventListener("click", openAttackSettingsModal);
     })();
 
+    let strategyAttackBtn;
+
     (function injectAttackStratButton() {
       const attacksWrap = document.querySelector(".qol-attacks");
       if (!attacksWrap) return;
@@ -670,18 +683,20 @@
       // Prevent duplicate injection
       if (attacksWrap.querySelector(".btnAttackStrat")) return;
 
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "btn btnAttackStrat";
-      btn.textContent = "🧠 Attack using Strategy";
+      strategyAttackBtn = document.createElement("button");
+      strategyAttackBtn.type = "button";
+      strategyAttackBtn.className = "btn btnAttackStrat";
+      strategyAttackBtn.textContent = `🧠 Quick Join & Attack (${getAttackStrategyCost(
+        attackStrategy
+      )})`;
 
       // Match styling but distinguish it
-      btn.style.background = "#7c3aed";
-      btn.style.borderColor = "#7c3aed";
+      strategyAttackBtn.style.background = "#7c3aed";
+      strategyAttackBtn.style.borderColor = "#7c3aed";
 
-      attacksWrap.appendChild(btn);
+      attacksWrap.appendChild(strategyAttackBtn);
 
-      btn.addEventListener("click", async () => {
+      strategyAttackBtn.addEventListener("click", async () => {
         const ids = getSelectedMonsterIds();
         if (!ids.length) {
           showStatus("Select at least 1 monster.");
