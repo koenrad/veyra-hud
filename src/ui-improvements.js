@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.11
+// @version      1.0.12
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @match        https://demonicscans.org/*
@@ -376,6 +376,8 @@
         margin: 5px;
         color: #e6e8ff;
         box-shadow: 0 10px 30px rgba(0,0,0,.4);
+        max-height: 70%;
+        overflow: auto;
       }
 
       .attack-strat-title {
