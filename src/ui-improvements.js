@@ -499,8 +499,8 @@
       slash: { id: "-0", cost: 1 },
       "power slash": { id: "-1", cost: 10 },
       "heroic slash": { id: "-2", cost: 50 },
-      "legendary slash": { id: "-3", cost: 100 },
-      "ultimate slash": { id: "-4", cost: 200 },
+      "ultimate slash": { id: "-3", cost: 100 },
+      "legendary slash": { id: "-4", cost: 200 },
     });
 
     function escapeHtml(s) {
