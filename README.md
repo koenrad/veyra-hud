@@ -36,6 +36,7 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
     - Valid strings: [ "slash", "power slash", "heroic slash", "legendary slash", "ultimate slash" ]
     - e.g.: [ "heroic slash", "power slash", "power slash", "slash","slash" ] - performs in order consuming 72 stamina
   - Strategy attack button now shows stamina cost
+  - Adds HP and Mana bars to wave page (in multi target card)
 - Battlepass
   - all 3 tiers are now linked when scrolling
   - auto scrolls to current level of battlepass.

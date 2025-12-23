@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.12
+// @version      1.0.13
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @match        https://demonicscans.org/*
@@ -356,6 +356,7 @@
     const ATTACK_URL = ENDPOINTS && ENDPOINTS.ATTACK ? ENDPOINTS.ATTACK : "";
 
     let attackStrategy = Storage.get("ui-improvements:attackStrategy", []);
+    let showHpBar = Storage.get("ui-improvements:showHpBar", true);
 
     GM_addStyle(`
       .attack-strat-overlay {
@@ -482,7 +483,7 @@
         height: 16px;
       }
 
-      .attack-strat-asterion-label {
+      .attack-strat-label {
         cursor: pointer;
       }
 
@@ -494,8 +495,59 @@
         background: #2d3154;
         color: #e6e8ff;
       }
+      .battle-card {
+        background:#1a1b25;
+        border:1px solid #24263a;
+        border-radius:16px;
+        box-shadow:0 12px 32px rgba(0,0,0,0.5);
+        padding:16px 18px;
+        position:relative;
+        display:flex;
+        flex-direction:column;
+        gap:12px;
+        max-width: 100%;
+        width: 100%;
+        box-sizing: border-box;
+        overflow-x: hidden;
+        min-width: 0; /* <- super important for flex items in grids */
+        max-width: 900px;
+        min-width: 0;
+        box-sizing: border-box;
+        word-break: break-word;
+        margin: 0 auto 18px;
+      }
+
+      /* Player MANA = blue */
+      .mana-fill--player {
+        background: linear-gradient(90deg, #4b7bff, #2f53ff);
+      }
 
       `);
+
+    // Pass in any monster id that is valid to grab the hp and mana bars.
+    async function fetchHpAndManaFragment(monster_id) {
+      const response = await fetch(`/battle.php?id=${monster_id}`);
+      const html = await response.text();
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+
+      const playerCard = doc.querySelector(".battle-card.player-card");
+
+      if (!playerCard) {
+        return document.createAttribute("div");
+      }
+      // Remove the fluff
+      playerCard.querySelector(".eyebrow")?.remove();
+      playerCard.querySelector(".muted")?.remove();
+      playerCard.querySelector(".inline-chips")?.remove();
+      playerCard.querySelector(".card-headline")?.remove();
+      const manaWrapper = playerCard.querySelector("#pManaText")?.parentElement;
+      manaWrapper?.querySelectorAll(".hp-text")[1]?.remove();
+      playerCard.id = "custom-hp-bar";
+
+      return playerCard;
+    }
 
     const Skills = Object.freeze({
       slash: { id: "-0", cost: 1 },
@@ -754,17 +806,20 @@
       const chipsWrap = modal.querySelector("#strategyChips");
       const meta = modal.querySelector("#strategyMeta");
 
-      // Load strategy and asterion multiplier from localStorage
-      let useAsterion = Storage.get("ui-improvements:useAsterion") || false;
+      // Load settings localStorage
+      let useAsterion = Storage.get("ui-improvements:useAsterion", false);
       let asterionValue = parseFloat(
         Storage.get("ui-improvements:asterionValue") || 1
       );
+      showHpBar = Storage.get("ui-improvements:showHpBar", true);
 
       // ---------- Helpers ----------
       function save() {
         Storage.set("ui-improvements:attackStrategy", attackStrategy);
         Storage.set("ui-improvements:useAsterion", useAsterion);
         Storage.set("ui-improvements:asterionValue", asterionValue);
+        Storage.set("ui-improvements:showHpBar", showHpBar);
+        // update the strategic attack button on the main page
         strategyAttackBtn.textContent = `🧠 Quick Join & Attack (${getAttackStrategyCost(
           attackStrategy
         )})`;
@@ -792,7 +847,7 @@
 
           const label = document.createElement("label");
           label.htmlFor = "useAsterionCheckbox";
-          label.className = "attack-strat-asterion-label";
+          label.className = "attack-strat-label";
           label.textContent = "Calculate Using Asterion";
 
           // Number input
@@ -823,6 +878,40 @@
           asterionContainer.appendChild(input);
 
           meta.appendChild(asterionContainer);
+        }
+
+        // ----------  Show HP Bar Settings Checkbox ----------
+        let hpbarSettingContainer = document.getElementById(
+          "hpbarSettingContainer"
+        );
+        if (!hpbarSettingContainer) {
+          hpbarSettingContainer = document.createElement("div");
+          hpbarSettingContainer.id = "hpbarSettingContainer";
+          hpbarSettingContainer.className = "hp-bar-settings-container";
+
+          // Checkbox container
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.id = "hpbarSettingCheckbox";
+          checkbox.checked = showHpBar;
+          checkbox.className = "attack-strat-checkbox";
+
+          const label = document.createElement("label");
+          label.htmlFor = "hpbarSettingCheckbox";
+          label.className = "attack-strat-label";
+          label.textContent =
+            "Show HP Bar (performs 1 extra request to battle.php)";
+
+          checkbox.addEventListener("change", () => {
+            showHpBar = checkbox.checked;
+            renderHpBar();
+            save();
+          });
+
+          hpbarSettingContainer.appendChild(checkbox);
+          hpbarSettingContainer.appendChild(label);
+
+          meta.appendChild(hpbarSettingContainer);
         }
       }
 
@@ -911,6 +1000,22 @@
       renderStrategy();
     }
 
+    async function renderHpBar() {
+      const firstMonsterCard = document.querySelector(".monster-card");
+      const multiAttackCard = document.querySelector("#waveQolPanel");
+      if (firstMonsterCard && multiAttackCard && showHpBar) {
+        const monsterId = firstMonsterCard.dataset.monsterId;
+        if (monsterId) {
+          const hpAndManaBars = await fetchHpAndManaFragment(monsterId);
+          if (hpAndManaBars) {
+            multiAttackCard.append(hpAndManaBars);
+          }
+        }
+      } else {
+        document.querySelector("#custom-hp-bar")?.remove();
+      }
+    }
+
     (function injectAttackSettings() {
       const actions = document.querySelector(".qol-select-actions");
       if (!actions) return;
@@ -930,7 +1035,7 @@
 
     let strategyAttackBtn;
 
-    (function injectAttackStratButton() {
+    (async function injectAttackStratButton() {
       const attacksWrap = document.querySelector(".qol-attacks");
       if (!attacksWrap) return;
 
@@ -1018,6 +1123,9 @@
         setQuickBtnsRunning(false);
         openBatchAttackModal(results);
       });
+
+      // --------- Inject Hp Bar --------- //
+      renderHpBar();
     })();
 
     // ------------- Custom Attack Strategy ------------//
