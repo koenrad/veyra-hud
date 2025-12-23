@@ -32,9 +32,7 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
   - Adds `In Battle:` count to show how many battles you are currently in.
   - Adds `Attack Strategy` to the multi target menu.
   - Adds a `Settings` button for `Attack Stragegy`.
-    - Enter a valid JSON array for your attack strategy.
-    - Valid strings: [ "slash", "power slash", "heroic slash", "legendary slash", "ultimate slash" ]
-    - e.g.: [ "heroic slash", "power slash", "power slash", "slash","slash" ] - performs in order consuming 72 stamina
+    - Tap name of attack to add to atrategy, arrange in order (top is first)
   - Strategy attack button now shows stamina cost
   - Adds HP and Mana bars to wave page (in multi target card)
 - Battlepass
