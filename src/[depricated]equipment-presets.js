@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Equipment Presets
 // @namespace    http://tampermonkey.net/
-// @version      1.0.1
+// @version      1.0.1-depricated
 // @description  Adds presets for pets & gear, with dropdown in top bar. Also makes top bar wrap on mobile. - deprecated as functionality is now in vanilla
 // @author       koenrad
 // @match        https://demonicscans.org/*

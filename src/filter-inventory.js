@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Filter Inventory
 // @namespace    http://tampermonkey.net/
-// @version      1.0.2
+// @version      1.0.3
 // @description  Filters the inventory semi-permanently, centers the sets on mobile
 // @author       koenrad
 // @match        https://demonicscans.org/inventory.php*
@@ -50,6 +50,7 @@
             .set-tabs {
                 flex-wrap: wrap;
                 justify-content: center !important;
+                overflow-x: visible !important;
             }`);
 
   let filterInventory = localStorage.getItem("filterInventory") === "true"; // persist toggle state
@@ -121,7 +122,7 @@
            max-height: 600px;
            overflow-y:auto;
            width:300px;
-           z-index:9999;
+           z-index:99999999;
          ">
       <strong>Show these items:</strong><br><br>
       <div id="filter-checkboxes"></div>

@@ -46,6 +46,15 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
   - Adds a buy {max} button to each item in stock so you can buy the max available
   - Adds a quantity input box for purchase of FSP using gems
 
+### filter-inventory.js
+
+- adds persistent filtering to inventory
+
+### [depricated]equipment-presets.js.js
+
+- adds presets for gear
+- depricated - capability available in vanilla now.
+
 ---
 
 ## 📦 Installation

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.14
+// @version      1.0.15
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @match        https://demonicscans.org/*
@@ -43,6 +43,22 @@
         border-color: red;
       }
     }
+  .set-tabs {
+    flex-wrap: wrap;
+  }
+  .game-topbar {
+    position: relative !important;
+  }
+  body {
+    padding-block: 0px !important;
+    padding-inline: 0px !important;
+    padding-top: 0px !important;
+  }
+  @media (max-width: 600px) {
+    body {
+        padding-top: 0px !important;
+    }
+  }
   `);
 
   // ===============================
@@ -110,6 +126,14 @@
     // Insert after the target
     targetLink.insertAdjacentElement("afterend", newLink);
   }
+
+  // ---------------------------- Top Bar ------------------------------- //
+  const gtbleft = document.querySelector(".gtb-left");
+  if (gtbleft) {
+    // wrap the top bar, even on small screens.
+    gtbleft.style.setProperty("flex-wrap", "wrap", "important");
+  }
+  // ---------------------------- Top Bar ------------------------------- //
 
   // -------------------- Menu Sidebar / Navigation -------------------- //
   // Find the Halloween Event link by its icon or label
