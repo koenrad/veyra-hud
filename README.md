@@ -28,13 +28,17 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
   - adds link to Legendary Forge
   - fairly easy to add custom links using `addMenuLinkAfter`
 - Wave Page
+
   - Modified `Loot X monsters` feature to be _significantly_ faster
+    - Loot faster loots in parallel now (even faster)
   - Adds `In Battle:` count to show how many battles you are currently in.
   - Adds `Attack Strategy` to the multi target menu.
   - Adds a `Settings` button for `Attack Stragegy`.
-    - Tap name of attack to add to atrategy, arrange in order (top is first)
+    - Tap name of attack to add to strategy, arrange in order (top is first)
   - Strategy attack button now shows stamina cost
   - Adds HP and Mana bars to wave page (in multi target card)
+    - Flashes red border around hp bar card when less than 10% hp
+
 - Battlepass
   - all 3 tiers are now linked when scrolling
   - auto scrolls to current level of battlepass.

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.13
+// @version      1.0.14
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @match        https://demonicscans.org/*
@@ -25,6 +25,23 @@
       box-shadow: 0 6px 18px rgba(0, 0, 0, .6);
       border: 1px solid #2b2d44;
       white-space: nowrap;
+    }
+    .flash-red-border {
+      position: relative; /* safe for most elements */
+      border: 2px solid red;
+      animation: flashRedBorder 1s infinite;
+    }
+
+    @keyframes flashRedBorder {
+      0% {
+        border-color: red;
+      }
+      50% {
+        border-color: transparent;
+      }
+      100% {
+        border-color: red;
+      }
     }
   `);
 
@@ -131,6 +148,7 @@
       "Legendary Forge",
       "🔥"
     );
+    addMenuLinkAfter("Guild", "/guild_dungeon.php", "Guild Dungeons", "🕳️");
   }
   // -------------------- Menu Sidebar / Navigation -------------------- //
 
@@ -245,7 +263,7 @@
         customBtn.id = "btnCustomLoot";
         customBtn.type = "button";
         customBtn.className = "custom-loot-btn";
-        customBtn.textContent = "💰 Loot X monsters (faster)";
+        customBtn.textContent = "💰 Loot X monsters (even faster)";
 
         btnLootX.insertAdjacentElement("afterend", customBtn);
         btnLootX.style.display = "none";
@@ -272,35 +290,40 @@
             totalGold = 0;
           const allItems = [];
           const allNotes = [];
-          for (let i = 0; i < targetIds.length; i++) {
+          const promises = targetIds.map(async (targetId, i) => {
             $stat.textContent = `Looting ${i + 1}/${
               targetIds.length
             }... (success: ${ok}, fail: ${fail})`;
+
             try {
-              const res = await lootOne(targetIds[i]);
+              const res = await lootOne(targetId);
+
               if (res.ok) {
                 ok++;
                 totalExp += res.exp;
                 totalGold += res.gold;
+
                 if (res.items?.length) {
                   allItems.push(...res.items);
                 } else if (res.note) {
                   allNotes.push(res.note);
                 }
+
                 const el = document.querySelector(
-                  `.monster-card[data-monster-id="${targetIds[i]}"]`
+                  `.monster-card[data-monster-id="${targetId}"]`
                 );
                 if (el) el.setAttribute("data-eligible", "0");
               } else {
                 fail++;
                 if (res.note) allNotes.push(res.note);
               }
-            } catch (_e) {
+            } catch {
               fail++;
               allNotes.push("Server error");
             }
-            // await new Promise((r) => setTimeout(r, 150));
-          }
+          });
+
+          await Promise.all(promises);
           $stat.textContent = `Done. Looted ${ok}, failed ${fail}.`;
           setRunning(false);
           openBatchLootModal(
@@ -537,6 +560,10 @@
       if (!playerCard) {
         return document.createAttribute("div");
       }
+
+      const hpEl = doc.getElementById("pHpFill");
+      const hpPercent = parseFloat(hpEl.style.width);
+
       // Remove the fluff
       playerCard.querySelector(".eyebrow")?.remove();
       playerCard.querySelector(".muted")?.remove();
@@ -545,6 +572,10 @@
       const manaWrapper = playerCard.querySelector("#pManaText")?.parentElement;
       manaWrapper?.querySelectorAll(".hp-text")[1]?.remove();
       playerCard.id = "custom-hp-bar";
+
+      if (hpPercent < 10) {
+        playerCard.className = `flash-red-border ${playerCard.className}`;
+      }
 
       return playerCard;
     }
