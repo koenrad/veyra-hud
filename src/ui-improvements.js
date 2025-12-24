@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.15
+// @version      1.0.16
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @match        https://demonicscans.org/*
@@ -478,6 +478,10 @@
         text-transform: capitalize;
       }
 
+      .capitalize {
+        text-transform: capitalize;
+      }
+
       .attack-strat-chip-controls {
         display: flex;
         align-items: center;
@@ -625,6 +629,7 @@
           }[m])
       );
     }
+
     function getAttackStrategyCost(strategy = []) {
       if (!Array.isArray(strategy)) return 0;
 
@@ -878,6 +883,7 @@
         strategyAttackBtn.textContent = `🧠 Quick Join & Attack (${getAttackStrategyCost(
           attackStrategy
         )})`;
+        updateAttackButtons();
         renderMeta();
       }
 
@@ -1090,9 +1096,37 @@
 
     let strategyAttackBtn;
 
+    function updateAttackButtons() {
+      console.log("updating attack buttons!");
+      const asterionValue =
+        parseFloat(Storage.get("ui-improvements:asterionValue")) || 1;
+      const useAsterion = Storage.get("ui-improvements:useAsterion") || false;
+
+      const attackButtons = document.querySelectorAll(".btnQuickJoinAttack");
+      if (attackButtons) {
+        console.log(attackButtons);
+        attackButtons.forEach((btn) => {
+          const text = btn.textContent.trim();
+          console.log(text);
+
+          const cost = useAsterion
+            ? Math.ceil(btn.dataset.stam * asterionValue)
+            : btn.dataset.stam;
+
+          const updatedText = `⚡ Quick Join & Attack (${cost})`;
+          btn.textContent = updatedText;
+        });
+      }
+    }
+
     (async function injectAttackStratButton() {
       const attacksWrap = document.querySelector(".qol-attacks");
       if (!attacksWrap) return;
+
+      const useAsterion = Storage.get("ui-improvements:useAsterion") || false;
+      if (useAsterion) {
+        updateAttackButtons();
+      }
 
       // Prevent duplicate injection
       if (attacksWrap.querySelector(".btnAttackStrat")) return;
