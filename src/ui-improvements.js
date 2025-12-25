@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.18
+// @version      1.0.19
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @match        https://demonicscans.org/*
@@ -763,10 +763,7 @@
             skill.cost
           );
 
-          const text =
-            "Attack: You have dealt <strong>134,934</strong> damage to <strong>Lizardman Vanguard</strong>!";
-
-          const match = text.match(/<strong>([\d,]+)<\/strong>/);
+          const match = res.msg.match(/<strong>([\d,]+)<\/strong>/);
           const damage = match ? Number(match[1].replace(/,/g, "")) : 0;
           totalDamage += damage;
 
