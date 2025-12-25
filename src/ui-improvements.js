@@ -547,6 +547,9 @@
         background: #2d3154;
         color: #e6e8ff;
       }
+      .attack-strat-damage-limit-input {
+        width: 120px;
+      }
       .battle-card {
         background:#1a1b25;
         border:1px solid #24263a;
