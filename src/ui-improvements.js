@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.16
+// @version      1.0.17
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @match        https://demonicscans.org/*
@@ -532,13 +532,14 @@
       .attack-strat-checkbox {
         width: 16px;
         height: 16px;
+        padding-right: 10px
       }
 
       .attack-strat-label {
         cursor: pointer;
       }
 
-      .attack-strat-asterion-input {
+      .attack-strat-asterion-input, .attack-strat-damage-limit-input {
         width: 60px;
         padding: 2px 4px;
         border-radius: 4px;
@@ -723,7 +724,12 @@
     }
 
     async function performAttackStrat(monsterId, attackStrat) {
+      let useDamageLimit = Storage.get("ui-improvements:useDamageLimit", false);
+      let damageLimitValue = parseFloat(
+        Storage.get("ui-improvements:damageLimitValue") || 0
+      );
       const results = [];
+      let totalDamage = 0;
 
       for (const skillName of attackStrat) {
         const skill = Skills[skillName.toLowerCase()];
@@ -737,12 +743,29 @@
           continue;
         }
 
+        if (
+          useDamageLimit &&
+          damageLimitValue &&
+          damageLimitValue > 0 &&
+          totalDamage > damageLimitValue
+        ) {
+          console.info(`target damage reached! skipping ${skillName}`);
+          continue;
+        }
+
         try {
           const res = await doAttack(
             monsterId,
             parseInt(skill.id, 10),
             skill.cost
           );
+
+          const text =
+            "Attack: You have dealt <strong>134,934</strong> damage to <strong>Lizardman Vanguard</strong>!";
+
+          const match = text.match(/<strong>([\d,]+)<\/strong>/);
+          const damage = match ? Number(match[1].replace(/,/g, "")) : 0;
+          totalDamage += damage;
 
           results.push({
             skill: skillName,
@@ -871,6 +894,10 @@
       let asterionValue = parseFloat(
         Storage.get("ui-improvements:asterionValue") || 1
       );
+      let useDamageLimit = Storage.get("ui-improvements:useDamageLimit", false);
+      let damageLimitValue = parseFloat(
+        Storage.get("ui-improvements:damageLimitValue") || 0
+      );
       showHpBar = Storage.get("ui-improvements:showHpBar", true);
 
       // ---------- Helpers ----------
@@ -879,6 +906,8 @@
         Storage.set("ui-improvements:useAsterion", useAsterion);
         Storage.set("ui-improvements:asterionValue", asterionValue);
         Storage.set("ui-improvements:showHpBar", showHpBar);
+        Storage.set("ui-improvements:useDamageLimit", useDamageLimit);
+        Storage.set("ui-improvements:damageLimitValue", damageLimitValue);
         // update the strategic attack button on the main page
         strategyAttackBtn.textContent = `🧠 Quick Join & Attack (${getAttackStrategyCost(
           attackStrategy
@@ -914,8 +943,8 @@
           // Number input
           const input = document.createElement("input");
           input.type = "number";
-          input.min = "0";
-          input.step = 0.001;
+          input.min = "1";
+          input.step = 0.5;
           input.value = asterionValue.toString();
           input.id = "asterionInput";
           input.className = "attack-strat-asterion-input";
@@ -939,6 +968,55 @@
           asterionContainer.appendChild(input);
 
           meta.appendChild(asterionContainer);
+        }
+
+        let damageLimitContainer = document.getElementById(
+          "damageLimitContainer"
+        );
+        if (!damageLimitContainer) {
+          damageLimitContainer = document.createElement("div");
+          damageLimitContainer.id = "damageLimitContainer";
+          damageLimitContainer.className = "attack-strat-damage-limit";
+
+          // Checkbox container
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.id = "useDamageLimitCheckbox";
+          checkbox.checked = useDamageLimit;
+          checkbox.className = "attack-strat-checkbox";
+
+          const label = document.createElement("label");
+          label.htmlFor = "useDamageLimitCheckbox";
+          label.className = "attack-strat-label";
+          label.textContent = "Use Damage Limit (useful for crits) ";
+
+          // Number input
+          const input = document.createElement("input");
+          input.type = "number";
+          input.min = "0";
+          input.value = damageLimitValue.toString();
+          input.id = "damageLimitInput";
+          input.className = "attack-strat-damage-limit-input";
+          input.style.display = useDamageLimit ? "inline-block" : "none";
+
+          checkbox.addEventListener("change", () => {
+            useDamageLimit = checkbox.checked;
+            input.style.display = useAsterion ? "inline-block" : "none";
+            save();
+          });
+
+          input.addEventListener("change", () => {
+            let val = parseFloat(input.value);
+            if (isNaN(val) || val <= 0) val = 1;
+            damageLimitValue = +val.toFixed(3);
+            save();
+          });
+
+          damageLimitContainer.appendChild(checkbox);
+          damageLimitContainer.appendChild(label);
+          damageLimitContainer.appendChild(input);
+
+          meta.appendChild(damageLimitContainer);
         }
 
         // ----------  Show HP Bar Settings Checkbox ----------
