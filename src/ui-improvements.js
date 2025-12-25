@@ -606,7 +606,7 @@
       playerCard.id = "custom-hp-bar";
 
       if (hpPercent < 10) {
-        playerCard.className = `flash-red-border ${playerCard.className}`;
+        playerCard.className = `flash-red-border needs-heal ${playerCard.className}`;
       }
 
       return playerCard;
