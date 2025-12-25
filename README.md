@@ -38,6 +38,12 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
   - Strategy attack button now shows stamina cost
   - Adds HP and Mana bars to wave page (in multi target card)
     - Flashes red border around hp bar card when less than 10% hp
+  - Damage limit added to settings
+    - stops strategic attack if damage exceeds the limit
+    - this is usefull to save stamina if your first high stam hit crits.
+    - `(limit {amount})` is added to the strategic attack button if limit is enabled
+  - Calculate with Asterion setting will show stamina costs with multiplier applied
+    - You still need to manually make sure Asterion is equipped.
 
 - Battlepass
   - all 3 tiers are now linked when scrolling

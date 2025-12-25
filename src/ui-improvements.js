@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.17
+// @version      1.0.18
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @match        https://demonicscans.org/*
@@ -851,6 +851,21 @@
       }
     }
 
+    function formatShortNumber(num) {
+      const abs = Math.abs(num);
+
+      if (abs >= 1e9) {
+        return (num / 1e9).toFixed(1).replace(/\.0$/, "") + "b";
+      }
+      if (abs >= 1e6) {
+        return (num / 1e6).toFixed(1).replace(/\.0$/, "") + "m";
+      }
+      if (abs >= 1e3) {
+        return Math.floor(num / 1e3) + "k";
+      }
+      return String(num);
+    }
+
     function openAttackSettingsModal() {
       if (document.getElementById("attackStratModal")) return;
 
@@ -912,9 +927,13 @@
         Storage.set("ui-improvements:useDamageLimit", useDamageLimit);
         Storage.set("ui-improvements:damageLimitValue", damageLimitValue);
         // update the strategic attack button on the main page
-        strategyAttackBtn.textContent = `🧠 Quick Join & Attack (${getAttackStrategyCost(
+        let newButtonString = `🧠 Quick Join & Attack (${getAttackStrategyCost(
           attackStrategy
-        )})`;
+        )}) `;
+        if (useDamageLimit) {
+          newButtonString += `(limit ${formatShortNumber(damageLimitValue)})`;
+        }
+        strategyAttackBtn.textContent = newButtonString;
         updateAttackButtons();
         renderMeta();
       }
@@ -1212,12 +1231,23 @@
       // Prevent duplicate injection
       if (attacksWrap.querySelector(".btnAttackStrat")) return;
 
+      let useDamageLimit = Storage.get("ui-improvements:useDamageLimit", false);
+      let damageLimitValue = parseFloat(
+        Storage.get("ui-improvements:damageLimitValue") || 0
+      );
+
+      let newButtonString = `🧠 Quick Join & Attack (${getAttackStrategyCost(
+        attackStrategy
+      )}) `;
+
+      if (useDamageLimit) {
+        newButtonString += `(limit ${formatShortNumber(damageLimitValue)})`;
+      }
+
       strategyAttackBtn = document.createElement("button");
       strategyAttackBtn.type = "button";
       strategyAttackBtn.className = "btn btnAttackStrat";
-      strategyAttackBtn.textContent = `🧠 Quick Join & Attack (${getAttackStrategyCost(
-        attackStrategy
-      )})`;
+      strategyAttackBtn.textContent = newButtonString;
 
       // Match styling but distinguish it
       strategyAttackBtn.style.background = "#7c3aed";
