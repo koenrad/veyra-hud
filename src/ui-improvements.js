@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.19
+// @version      1.0.20
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @match        https://demonicscans.org/*
@@ -287,10 +287,10 @@
         customBtn.id = "btnCustomLoot";
         customBtn.type = "button";
         customBtn.className = "custom-loot-btn";
-        customBtn.textContent = "💰 Loot X monsters (even faster)";
+        customBtn.textContent = "💰 Loot X monsters (super fast)";
 
         btnLootX.insertAdjacentElement("afterend", customBtn);
-        btnLootX.style.display = "none";
+        btnLootX.textContent = "💰 Loot X monsters (vanilla)";
 
         customBtn?.addEventListener("click", async () => {
           const n = Math.max(1, parseInt($input.value || "1", 10));
@@ -1161,7 +1161,12 @@
     async function renderHpBar() {
       const firstMonsterCard = document.querySelector(".monster-card");
       const multiAttackCard = document.querySelector("#waveQolPanel");
-      if (firstMonsterCard && multiAttackCard && showHpBar) {
+      if (
+        HIDE_DEAD_MONSTERS &&
+        firstMonsterCard &&
+        multiAttackCard &&
+        showHpBar
+      ) {
         const monsterId = firstMonsterCard.dataset.monsterId;
         if (monsterId) {
           const hpAndManaBars = await fetchHpAndManaFragment(monsterId);
