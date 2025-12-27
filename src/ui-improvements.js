@@ -4,6 +4,8 @@
 // @version      1.0.20
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
+// @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
+// @downloadURL  https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
 // @match        https://demonicscans.org/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=demonicscans.org
 // @grant        GM_addStyle
