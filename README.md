@@ -56,6 +56,11 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
 
 - adds persistent filtering to inventory
 
+## gamba-enhanced.js
+
+- Adds multi-pull capability to the 2025 Winter Event gacha machine.
+- Shows images of winnings with a count underneath.
+
 ### [depricated]equipment-presets.js.js
 
 - adds presets for gear
