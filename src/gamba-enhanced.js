@@ -4,6 +4,8 @@
 // @version      1.0.1
 // @description  Papa Zeus 777 MAX WIN, Dare to TRY????
 // @author       Papa ZEUS - enhanced by koenrad
+// @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/gamba-enhanced.js
+// @downloadURL  https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/gamba-enhanced.js
 // @match        https://demonicscans.org/a_lizardmen_winter.php
 // @grant        none
 // ==/UserScript==
