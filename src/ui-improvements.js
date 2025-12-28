@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.20
+// @version      1.0.21
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -588,25 +588,24 @@
 
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, "text/html");
+      const playerCard = document.createElement("div");
+      playerCard.className = "battle-card player-card";
+      playerCard.id = "custom-hp-bar";
 
-      const playerCard = doc.querySelector(".battle-card.player-card");
+      const hpBars = doc.getElementsByClassName("hp-bar");
 
-      if (!playerCard) {
-        return document.createAttribute("div");
+      if (hpBars) {
+        for (const hpBar of hpBars) {
+          const hpBarContainer = hpBar.parentElement;
+          playerCard.appendChild(hpBarContainer);
+        }
       }
+
+      const manaWrapper = playerCard.querySelector("#pManaText")?.parentElement;
+      manaWrapper?.querySelectorAll(".hp-text")[1]?.remove();
 
       const hpEl = doc.getElementById("pHpFill");
       const hpPercent = parseFloat(hpEl.style.width);
-
-      // Remove the fluff
-      playerCard.querySelector(".eyebrow")?.remove();
-      playerCard.querySelector(".muted")?.remove();
-      playerCard.querySelector(".inline-chips")?.remove();
-      playerCard.querySelector(".card-headline")?.remove();
-      const manaWrapper = playerCard.querySelector("#pManaText")?.parentElement;
-      manaWrapper?.querySelectorAll(".hp-text")[1]?.remove();
-      playerCard.id = "custom-hp-bar";
-
       if (hpPercent < 10) {
         playerCard.className = `flash-red-border needs-heal ${playerCard.className}`;
       }
@@ -674,39 +673,67 @@
     }
 
     function openBatchAttackModal(results) {
-      const ok = results.filter((r) => r.attackOk).length;
+      const ok = results.filter((r) => r.ok).length;
       const fail = results.length - ok;
 
       const sum = document.getElementById("bamSummary");
       const list = document.getElementById("bamList");
 
-      if (sum)
+      if (sum) {
         sum.textContent = `Processed: ${results.length} | Success: ${ok} | Failed: ${fail}`;
+      }
+
       if (list) {
-        list.innerHTML = results
-          .map((r) => {
-            const color = r.attackOk ? "#7CFFB8" : "#ff6b6b";
-            const border = r.attackOk
-              ? "rgba(0,255,140,.25)"
-              : "rgba(255,0,80,.25)";
-            return `
-          <div style="background:#1e1e2f;border:1px solid ${border};border-radius:10px;padding:10px 12px;">
-            <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
-              <div style="font-weight:700;color:#e6e9ff;">
-                #${r.monsterId}
-              </div>
-              <div style="font-weight:800;color:${color};">
-                ${r.attackOk ? "✅ OK" : "❌ FAIL"}
-              </div>
-            </div>
-            <div style="margin-top:6px;color:#9aa0be;font-size:12px;line-height:1.45;">
-              ${r.joinMsg ? `Join: ${escapeHtml(r.joinMsg)}<br>` : ""}
-              Attack: ${escapeHtml(r.attackMsg || "")}
-            </div>
-          </div>
-        `;
-          })
-          .join("");
+        list.innerHTML = ""; // clear previous entries
+
+        results.forEach((r) => {
+          const color = r.ok ? "#7CFFB8" : "#ff6b6b";
+          const border = r.ok ? "rgba(0,255,140,.25)" : "rgba(255,0,80,.25)";
+
+          // Outer card
+          const card = document.createElement("div");
+          card.style.cssText = `
+        background:#1e1e2f;
+        border:1px solid ${border};
+        border-radius:10px;
+        padding:10px 12px;
+      `;
+
+          // Header row
+          const header = document.createElement("div");
+          header.style.cssText = `
+        display:flex;
+        justify-content:space-between;
+        gap:10px;
+        align-items:center;
+      `;
+
+          const monster = document.createElement("div");
+          monster.style.fontWeight = "700";
+          monster.style.color = "#e6e9ff";
+          monster.textContent = `#${r.monsterId ?? "?"}`;
+
+          const status = document.createElement("div");
+          status.style.fontWeight = "800";
+          status.style.color = color;
+          status.textContent = r.ok ? "✅ OK" : "❌ FAIL";
+
+          header.append(monster, status);
+
+          // Message container
+          const msgWrap = document.createElement("div");
+          msgWrap.style.cssText = `
+        margin-top:6px;
+        color:#9aa0be;
+        font-size:12px;
+        line-height:1.45;
+      `;
+          console.log("r", r);
+          msgWrap.appendChild(r.msgEl);
+
+          card.append(header, msgWrap);
+          list.appendChild(card);
+        });
       }
 
       document.getElementById("batchAttackModal").style.display = "flex";
@@ -728,11 +755,29 @@
       });
     }
 
+    function buildResult(skill, ok, msg, damage = 0) {
+      const msgEl = document.createElement("div");
+      msgEl.innerHTML = msg;
+      msgEl.className = ok ? "attack-success" : "attack-fail";
+
+      return {
+        skill,
+        ok,
+        msg,
+        msgEl,
+        damage,
+      };
+    }
+
     async function performAttackStrat(monsterId, attackStrat) {
-      let useDamageLimit = Storage.get("ui-improvements:useDamageLimit", false);
-      let damageLimitValue = parseFloat(
+      const useDamageLimit = Storage.get(
+        "ui-improvements:useDamageLimit",
+        false
+      );
+      const damageLimitValue = parseFloat(
         Storage.get("ui-improvements:damageLimitValue") || 0
       );
+
       const results = [];
       let totalDamage = 0;
 
@@ -740,22 +785,19 @@
         const skill = Skills[skillName.toLowerCase()];
 
         if (!skill) {
-          results.push({
-            skill: skillName,
-            ok: false,
-            msg: `Unknown skill: ${skillName}`,
-          });
+          results.push(
+            buildResult(skillName, false, `Unknown skill: ${skillName}`)
+          );
           continue;
         }
 
         if (
           useDamageLimit &&
-          damageLimitValue &&
           damageLimitValue > 0 &&
-          totalDamage > damageLimitValue
+          totalDamage >= damageLimitValue
         ) {
-          console.info(`target damage reached! skipping ${skillName}`);
-          continue;
+          console.info(`Target damage reached, skipping ${skillName}`);
+          break;
         }
 
         try {
@@ -765,31 +807,30 @@
             skill.cost
           );
 
-          const match = res.msg.match(/<strong>([\d,]+)<\/strong>/);
+          const msg =
+            res.msg ||
+            (res.ok
+              ? `Attacked with ${skillName}`
+              : `Attack failed with ${skillName}`);
+
+          const match = msg.match(/<strong>([\d,]+)<\/strong>/);
           const damage = match ? Number(match[1].replace(/,/g, "")) : 0;
+
           totalDamage += damage;
 
-          results.push({
-            skill: skillName,
-            ok: !!res.ok,
-            msg:
-              res.msg ||
-              (res.ok
-                ? `Attacked with ${skillName}`
-                : `Attack failed with ${skillName}`),
-          });
+          results.push(buildResult(skillName, !!res.ok, msg, damage));
 
           if (!res.ok) break; // stop strategy on failure
-        } catch (e) {
-          results.push({
-            skill: skillName,
-            ok: false,
-            msg: `Attack request failed (${skillName})`,
-          });
+        } catch {
+          results.push(
+            buildResult(
+              skillName,
+              false,
+              `Attack request failed (${skillName})`
+            )
+          );
           break;
         }
-
-        // await new Promise((r) => setTimeout(r, 120));
       }
 
       return results;
@@ -1274,10 +1315,7 @@
         setQuickBtnsRunning(true);
         showStatus(`Running attack strategy on ${ids.length} monsters...`);
 
-        const results = [];
-
-        for (let i = 0; i < ids.length; i++) {
-          const id = ids[i];
+        const tasks = ids.map(async (id, i) => {
           showStatus(
             `(${i + 1}/${ids.length}) Strategy attacking monster #${id}...`
           );
@@ -1296,32 +1334,42 @@
             } catch {
               joinRes = { ok: false, msg: "Join request failed" };
             }
-          }
 
-          if (!joinRes.ok) {
-            results.push({
-              monsterId: id,
-              joinMsg: joinRes.msg,
-              attackOk: false,
-              attackMsg: "Skipped (join failed)",
-            });
-            continue;
-          }
+            if (!joinRes.ok) {
+              const msgEl = document.createElement("div");
+              msgEl.textContent = "Skipped (join failed)";
 
-          if (card) {
-            card.dataset.joined = "1";
-            card.dataset.unjoined = "0";
+              return {
+                monsterId: id,
+                joinMsg: joinRes.msg,
+                ok: false,
+                msgEl,
+              };
+            }
+
+            if (card) {
+              card.dataset.joined = "1";
+              card.dataset.unjoined = "0";
+            }
           }
 
           const atkResults = await performAttackStrat(id, attackStrategy);
 
-          results.push({
+          const resultsEl = document.createElement("div");
+          for (const result of atkResults) {
+            resultsEl.appendChild(result.msgEl);
+          }
+
+          return {
             monsterId: id,
             joinMsg: joinRes.msg,
-            attackOk: atkResults.every((r) => r.ok),
-            attackMsg: atkResults.map((r) => r.msg).join(" | "),
-          });
-        }
+            ok: atkResults.every((r) => r.ok),
+            msgEl: resultsEl,
+          };
+        });
+
+        // 🔑 WAIT FOR ALL MONSTERS TO FINISH
+        const results = await Promise.all(tasks);
 
         showStatus("Strategy complete.");
         setQuickBtnsRunning(false);
