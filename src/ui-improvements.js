@@ -597,16 +597,26 @@
       const hpBars = livePlayerCard.getElementsByClassName("hp-bar");
 
       if (hpBars) {
-        console.log("hpBars", hpBars);
+        // console.log("hpBars", hpBars);
         for (const hpBar of hpBars) {
           const hpBarContainer = hpBar.parentElement;
+          // console.log(hpBarContainer);
+          const hpEl = hpBarContainer.querySelector("#pHpFill");
+          if (hpEl) {
+            const hpPercent = parseFloat(hpEl.style.width);
+            // console.log("hpPercent", hpPercent);
+            if (hpPercent < 10) {
+              playerCard.className = `flash-red-border needs-heal ${playerCard.className}`;
+            }
+          }
           playerCard.appendChild(hpBarContainer);
         }
       }
 
-      const hpEl = doc.getElementById("pHpFill");
+      const hpEl = livePlayerCard.querySelector("#pHpFill");
       if (hpEl) {
         const hpPercent = parseFloat(hpEl.style.width);
+        console.log("hpPercent", hpPercent);
         if (hpPercent < 10) {
           playerCard.className = `flash-red-border needs-heal ${playerCard.className}`;
         }
