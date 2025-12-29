@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.22
+// @version      1.0.23
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -579,6 +579,21 @@
         background: linear-gradient(90deg, #4b7bff, #2f53ff);
       }
 
+      .monster-container {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      .monster-row {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 16px;
+        width: 100%;
+      }
+
+
       `);
 
     // Pass in any monster id that is valid to grab the hp and mana bars.
@@ -610,15 +625,6 @@
             }
           }
           playerCard.appendChild(hpBarContainer);
-        }
-      }
-
-      const hpEl = livePlayerCard.querySelector("#pHpFill");
-      if (hpEl) {
-        const hpPercent = parseFloat(hpEl.style.width);
-        console.log("hpPercent", hpPercent);
-        if (hpPercent < 10) {
-          playerCard.className = `flash-red-border needs-heal ${playerCard.className}`;
         }
       }
 
@@ -1393,6 +1399,42 @@
     })();
 
     // ------------- Custom Attack Strategy ------------//
+
+    // --------- Group Mobs in their own row ----------- //
+
+    (function groupMobs() {
+      const container = document.querySelector(".monster-container");
+      const cards = Array.from(container.querySelectorAll(".monster-card"));
+
+      const groups = new Map();
+
+      // Group cards by data-name
+      cards.forEach((card) => {
+        const name = card.dataset.name;
+        if (!groups.has(name)) {
+          groups.set(name, []);
+        }
+        groups.get(name).push(card);
+      });
+
+      // Clear container
+      container.innerHTML = "";
+
+      // Rebuild grouped + sorted rows
+      groups.forEach((groupCards, name) => {
+        // 🔑 Sort cards by data-monster-id (numeric)
+        groupCards.sort((a, b) => {
+          return Number(a.dataset.monsterId) - Number(b.dataset.monsterId);
+        });
+
+        const row = document.createElement("div");
+        row.className = "monster-row";
+        row.dataset.name = name;
+
+        groupCards.forEach((card) => row.appendChild(card));
+        container.appendChild(row);
+      });
+    })();
   }
   // -------------------------- Wave X Page ---------------------------- //
 
