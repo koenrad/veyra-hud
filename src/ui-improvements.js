@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.21
+// @version      1.0.22
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -592,22 +592,24 @@
       playerCard.className = "battle-card player-card";
       playerCard.id = "custom-hp-bar";
 
-      const hpBars = doc.getElementsByClassName("hp-bar");
+      const livePlayerCard = doc.querySelector(".battle-card.player-card");
+
+      const hpBars = livePlayerCard.getElementsByClassName("hp-bar");
 
       if (hpBars) {
+        console.log("hpBars", hpBars);
         for (const hpBar of hpBars) {
           const hpBarContainer = hpBar.parentElement;
           playerCard.appendChild(hpBarContainer);
         }
       }
 
-      const manaWrapper = playerCard.querySelector("#pManaText")?.parentElement;
-      manaWrapper?.querySelectorAll(".hp-text")[1]?.remove();
-
       const hpEl = doc.getElementById("pHpFill");
-      const hpPercent = parseFloat(hpEl.style.width);
-      if (hpPercent < 10) {
-        playerCard.className = `flash-red-border needs-heal ${playerCard.className}`;
+      if (hpEl) {
+        const hpPercent = parseFloat(hpEl.style.width);
+        if (hpPercent < 10) {
+          playerCard.className = `flash-red-border needs-heal ${playerCard.className}`;
+        }
       }
 
       return playerCard;
