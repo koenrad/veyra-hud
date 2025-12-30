@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.25
+// @version      1.0.26
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -103,6 +103,50 @@
       return localStorage.getItem(key) !== null;
     },
   };
+
+  async function useHealthPotion() {
+    try {
+      if (!USER_ID) {
+        showNotification("USER_ID not set!", "error");
+        return;
+      }
+
+      const fd = new URLSearchParams();
+      fd.set("user_id", USER_ID);
+
+      const res = await fetch("user_heal_potion.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: fd.toString(),
+      });
+
+      const ct = res.headers.get("content-type") || "";
+      const raw = await res.text();
+      let data = null;
+      if (ct.includes("application/json")) {
+        try {
+          data = JSON.parse(raw);
+        } catch {}
+      }
+
+      if (!res.ok || !data) {
+        showNotification(
+          data?.message || raw.slice(0, 200) || `HTTP ${res.status}`,
+          "error"
+        );
+        return;
+      }
+      if (String(data.status).trim() === "success") {
+        showNotification(data.message || "Healed!", "success");
+        setTimeout(() => location.reload(), 500);
+      } else {
+        showNotification(data.message || "Heal failed.", "error");
+      }
+    } catch (e) {
+      console.log(e);
+      showNotification("Network error.", "error");
+    }
+  }
 
   function addMenuLinkAfter(afterLabel, newUrl, newTitle, newIcon = "✨") {
     // Find the anchor with the matching label text
@@ -1418,7 +1462,7 @@
     // ------------- Custom Attack Strategy ------------//
 
     // --------- Group Mobs in their own row ----------- //
-    const useGroupedMobs = Storage.get("useGroupedMobs", true);
+    const useGroupedMobs = Storage.get("useGroupedMobs", false);
 
     (function groupMobs() {
       const capCheckbox = document.getElementById("fCapNotReached");
@@ -1639,4 +1683,73 @@
   injectBuyX();
 
   // ---------------------------- Merchant ----------------------------- //
+
+  // ------------------------- Battle Side Bar ------------------------- //
+
+  GM_addStyle(
+    `
+    #use-health-potion {
+      flex: 1 1 auto;
+      min-width: 0;
+      background: #4b5ef5;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      cursor: pointer;
+      text-align: center;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, .4);
+    }
+    /* Disabled state */
+    #use-health-potion:disabled {
+      background: #7a7a7a;
+      color: #ddd;
+      cursor: not-allowed;
+      box-shadow: none;
+      opacity: 0.6;
+    }
+    `
+  );
+
+  (function addHealthPotionToSideBar() {
+    const drawer = document.getElementById("battleDrawer");
+    if (!drawer) return;
+
+    const card = document.createElement("div");
+    card.className = "potion-card potion-card-health";
+    card.dataset.itemId = "health";
+
+    card.innerHTML = `
+    <img src="https://demonicscans.org/images/items/1760475550_hp_dungeon_portion.webp" alt="Health Potion">
+    <div class="potion-main">
+      <div class="potion-name">
+        <span>Health Potion</span>
+      </div>
+      <div class="potion-desc" id="health-potion-desc">
+        A magic Potion that restores your HP.
+      </div>
+      <div class="potion-actions">
+        <button id="use-health-potion" type="button">Use</button>
+      </div>
+    </div>
+  `;
+
+    const btn = card.querySelector("#use-health-potion");
+    const description = card.querySelector("#health-potion-desc");
+
+    if (typeof USER_ID === "undefined") {
+      btn.disabled = true;
+      description.innerHTML = `Health potion is unavailable on this page.`;
+    }
+
+    // Hook up button
+    card.querySelector("#use-health-potion").addEventListener("click", () => {
+      useHealthPotion();
+    });
+
+    drawer.appendChild(card);
+  })();
+  // ------------------------- Battle Side Bar ------------------------- //
 })();

@@ -46,7 +46,13 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
     - You still need to manually make sure Asterion is equipped.
   - Use Groups checkbox
     - Groups mobs when filtered to "All Monsters", and adds a divider between them
-    - Usefull for look at the entire wave on a large monitor
+    - Useful for looking at the entire wave on a large monitor
+
+- Battle Consumables Side Bar
+
+  - Adds health potion usage (does not check for quanity)
+  - Not available on every page.
+  - Available on wave page.
 
 - Battlepass
   - all 3 tiers are now linked when scrolling
@@ -59,7 +65,7 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
 
 - adds persistent filtering to inventory
 
-## gamba-enhanced.js
+### gamba-enhanced.js
 
 - Adds multi-pull capability to the 2025 Winter Event gacha machine.
 - Shows images of winnings with a count underneath.
