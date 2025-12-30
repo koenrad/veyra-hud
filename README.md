@@ -36,8 +36,9 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
   - Adds a `Settings` button for `Attack Stragegy`.
     - Tap name of attack to add to strategy, arrange in order (top is first)
   - Strategy attack button now shows stamina cost
-  - Adds HP and Mana bars to wave page (in multi target card)
+  - Adds HP bar to wave page (in multi target card)
     - Flashes red border around hp bar card when less than 10% hp
+    - Color of bar is changeable in settings
   - Damage limit added to settings
     - stops strategic attack if damage exceeds the limit
     - this is usefull to save stamina if your first high stam hit crits.

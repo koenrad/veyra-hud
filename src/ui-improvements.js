@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.26
+// @version      1.0.27
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -671,6 +671,7 @@
       const livePlayerCard = doc.querySelector(".battle-card.player-card");
 
       const hpBars = livePlayerCard.getElementsByClassName("hp-bar");
+      const hpBarColor = Storage.get("ui-improvements:hpBarColor", "#55ff55");
 
       if (hpBars) {
         // console.log("hpBars", hpBars);
@@ -680,6 +681,7 @@
           const hpEl = hpBarContainer.querySelector("#pHpFill");
           if (hpEl) {
             const hpPercent = parseFloat(hpEl.style.width);
+            hpEl.style.background = hpBarColor;
             // console.log("hpPercent", hpPercent);
             if (hpPercent < 10) {
               playerCard.className = `flash-red-border needs-heal ${playerCard.className}`;
@@ -1036,7 +1038,7 @@
         Storage.get("ui-improvements:damageLimitValue") || 0
       );
       showHpBar = Storage.get("ui-improvements:showHpBar", true);
-
+      let hpBarColor = Storage.get("ui-improvements:hpBarColor", "#55ff55");
       // ---------- Helpers ----------
       function save() {
         Storage.set("ui-improvements:attackStrategy", attackStrategy);
@@ -1045,6 +1047,7 @@
         Storage.set("ui-improvements:showHpBar", showHpBar);
         Storage.set("ui-improvements:useDamageLimit", useDamageLimit);
         Storage.set("ui-improvements:damageLimitValue", damageLimitValue);
+        Storage.set("ui-improvements:hpBarColor", hpBarColor);
         // update the strategic attack button on the main page
         let newButtonString = `🧠 Quick Join & Attack (${getAttackStrategyCost(
           attackStrategy
@@ -1182,14 +1185,29 @@
           label.textContent =
             "Show HP Bar (performs 1 extra request to battle.php)";
 
+          const colorInput = document.createElement("input");
+          colorInput.type = "color";
+          colorInput.value = hpBarColor;
+          colorInput.style.marginLeft = "8px";
+          colorInput.style.display = showHpBar ? "inline-block" : "none";
+
           checkbox.addEventListener("change", () => {
             showHpBar = checkbox.checked;
+            colorInput.style.display = showHpBar ? "inline-block" : "none";
+            renderHpBar();
+            save();
+          });
+
+          colorInput.addEventListener("change", () => {
+            console.log("Selected color:", colorInput.value);
+            hpBarColor = colorInput.value;
             renderHpBar();
             save();
           });
 
           hpbarSettingContainer.appendChild(checkbox);
           hpbarSettingContainer.appendChild(label);
+          hpbarSettingContainer.appendChild(colorInput);
 
           meta.appendChild(hpbarSettingContainer);
         }
@@ -1289,6 +1307,10 @@
         multiAttackCard &&
         showHpBar
       ) {
+        const existing = document.getElementById("custom-hp-bar");
+        if (existing) {
+          existing.remove();
+        }
         const monsterId = firstMonsterCard.dataset.monsterId;
         if (monsterId) {
           const hpAndManaBars = await fetchHpAndManaFragment(monsterId);
