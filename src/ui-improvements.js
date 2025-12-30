@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.24
+// @version      1.0.25
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -579,13 +579,13 @@
         background: linear-gradient(90deg, #4b7bff, #2f53ff);
       }
 
-      .monster-container {
+      .custom-monster-container {
         display: flex;
         flex-direction: column;
         gap: 24px;
       }
 
-      .monster-row {
+     .monster-row {
         display: flex;
         justify-content: center;
         flex-wrap: wrap;
@@ -1418,39 +1418,87 @@
     // ------------- Custom Attack Strategy ------------//
 
     // --------- Group Mobs in their own row ----------- //
+    const useGroupedMobs = Storage.get("useGroupedMobs", true);
 
     (function groupMobs() {
-      const container = document.querySelector(".monster-container");
-      const cards = Array.from(container.querySelectorAll(".monster-card"));
+      const capCheckbox = document.getElementById("fCapNotReached");
+      if (!capCheckbox) return;
 
-      const groups = new Map();
+      // Create label + checkbox
+      const label = document.createElement("label");
 
-      // Group cards by data-name
-      cards.forEach((card) => {
-        const name = card.dataset.name;
-        if (!groups.has(name)) {
-          groups.set(name, []);
-        }
-        groups.get(name).push(card);
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.id = "fUseGroups";
+
+      // Initialize from storage
+      checkbox.checked = !!Storage.get("useGroupedMobs", false);
+
+      label.appendChild(checkbox);
+      label.appendChild(document.createTextNode(" Use Groups"));
+
+      // Insert after CAP not reached label
+      const capLabel = capCheckbox.closest("label");
+      capLabel.insertAdjacentElement("afterend", label);
+
+      // Change handler
+      checkbox.addEventListener("change", (e) => {
+        Storage.set("useGroupedMobs", e.target.checked);
+        window.location.reload();
       });
 
-      // Clear container
-      container.innerHTML = "";
+      if (useGroupedMobs) {
+        const container = document.querySelector(".monster-container");
+        const cards = Array.from(container.querySelectorAll(".monster-card"));
+        const filterSelect = document.querySelector("#fNameSel");
+        const filterValue = filterSelect.value;
 
-      // Rebuild grouped + sorted rows
-      groups.forEach((groupCards, name) => {
-        // 🔑 Sort cards by data-monster-id (numeric)
-        groupCards.sort((a, b) => {
-          return Number(a.dataset.monsterId) - Number(b.dataset.monsterId);
+        filterSelect.dataset.prev = filterSelect.value;
+
+        filterSelect.addEventListener("change", (e) => {
+          const prev = e.target.dataset.prev;
+          const curr = e.target.value;
+
+          e.target.dataset.prev = curr;
+          if (prev === "" || curr === "") {
+            setTimeout(() => {
+              window.location.reload();
+            }, 300);
+          }
         });
 
-        const row = document.createElement("div");
-        row.className = "monster-row";
-        row.dataset.name = name;
+        if (filterValue === "") {
+          container.className = `${container.className} custom-monster-container`;
+          const groups = new Map();
 
-        groupCards.forEach((card) => row.appendChild(card));
-        container.appendChild(row);
-      });
+          // Group cards by data-name
+          cards.forEach((card) => {
+            const name = card.dataset.name;
+            if (!groups.has(name)) {
+              groups.set(name, []);
+            }
+            groups.get(name).push(card);
+          });
+
+          // Clear container
+          container.innerHTML = "";
+
+          // Rebuild grouped + sorted rows
+          groups.forEach((groupCards, name) => {
+            // 🔑 Sort cards by data-monster-id (numeric)
+            groupCards.sort((a, b) => {
+              return Number(a.dataset.monsterId) - Number(b.dataset.monsterId);
+            });
+
+            const row = document.createElement("div");
+            row.className = "monster-row";
+            row.dataset.name = name;
+
+            groupCards.forEach((card) => row.appendChild(card));
+            container.appendChild(row);
+          });
+        }
+      }
     })();
   }
   // -------------------------- Wave X Page ---------------------------- //

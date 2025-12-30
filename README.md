@@ -44,6 +44,9 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
     - `(limit {amount})` is added to the strategic attack button if limit is enabled
   - Calculate with Asterion setting will show stamina costs with multiplier applied
     - You still need to manually make sure Asterion is equipped.
+  - Use Groups checkbox
+    - Groups mobs when filtered to "All Monsters", and adds a divider between them
+    - Usefull for look at the entire wave on a large monitor
 
 - Battlepass
   - all 3 tiers are now linked when scrolling
