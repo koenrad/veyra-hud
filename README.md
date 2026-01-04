@@ -51,9 +51,9 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
 
 - Battle Consumables Side Bar
 
-  - Adds health potion usage (does not check for quanity)
-  - Not available on every page.
-  - Available on wave page.
+  - ~~Adds health potion usage (does not check for quanity)~~ FHP added in vanilla
+  - Makes sidebar scrollable
+  - Adds margin to last potion so use button is not hidden.
 
 - Battlepass
   - all 3 tiers are now linked when scrolling
