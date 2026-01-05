@@ -66,6 +66,16 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
 
 - adds persistent filtering to inventory
 
+### dungeon-participation-check.js
+
+- Adds "Generate Report" button to the dungeon instance page
+- Report is displayed at the bottom of the page once generated.
+- Re-generating the report will overwrite the old report
+- The report is saved in localStorage, so you won't have to generate it every time
+- Checks all mobs based on the MONSTER_CONFIG object
+- You can impose damage limits on a per mob type basis.
+- Damage limit violations can be seen when clicking on a row in the report
+
 ### gamba-enhanced.js
 
 - Adds multi-pull capability to the 2025 Winter Event gacha machine.

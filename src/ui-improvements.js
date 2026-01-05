@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      1.0.27
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
-// @author       koenrad
+// @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
 // @downloadURL  https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
 // @match        https://demonicscans.org/*
