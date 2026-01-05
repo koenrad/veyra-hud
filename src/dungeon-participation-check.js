@@ -4,6 +4,8 @@
 // @version      1.0.0
 // @description  Dungeon participation report
 // @author       [SEREPH] koenrad
+// @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/dungeon-participation-check.js
+// @downloadURL  https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/dungeon-participation-check.js
 // @match        https://demonicscans.org/guild_dungeon_instance.php*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=demonicscans.org
 // @grant        GM_addStyle
