@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dungeon Participation Check
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0
+// @version      1.0.1
 // @description  Dungeon participation report
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/dungeon-participation-check.js
@@ -309,17 +309,14 @@
         player.monstersDamaged += 1;
 
         // Determine max damage eligible for EXP
-        let damageCap = exp_cap;
-        if (imposed_damage_limit > 0) {
-          damageCap = Math.min(damageCap, imposed_damage_limit);
-        }
+        let damageCap = Math.max(exp_cap, 0);
 
         const damageForExp = Math.min(damage, damageCap);
         const earnedExp = damageForExp * exp_per_damage;
         player.totalExp += earnedExp;
 
         // Track damage over the exp_cap
-        const overExpCap = Math.max(damage - damageCap, 0);
+        const overExpCap = Math.max(damage - exp_cap, 0);
         player.damageOverExpCap += overExpCap;
 
         // Track monsters where player exceeded imposed_damage_limit
