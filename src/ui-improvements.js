@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.29
+// @version      2.0.0
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -61,7 +61,41 @@
         padding-top: 0px !important;
     }
   }
-  
+  .switch-label {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    font-size: 14px;
+    user-select: none;
+  }
+  .switch-label input[type="checkbox"] {
+    display: none;
+  }
+  .switch-label .slider {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    background-color: #ccc;
+    border-radius: 20px;
+    transition: background-color 0.3s;
+  }
+  .switch-label .slider::before {
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 2px;
+    top: 2px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.3s;
+  }
+  .switch-label input[type="checkbox"]:checked + .slider {
+    background-color: #4caf50;
+  }
+  .switch-label input[type="checkbox"]:checked + .slider::before {
+    transform: translateX(16px);
+  }
   `);
 
   // ===============================
@@ -174,6 +208,352 @@
     targetLink.insertAdjacentElement("afterend", newLink);
   }
 
+  // ------------------------ Settings Drawer --------------------------- //
+
+  GM_addStyle(`
+  
+  .settings-drawer-trigger {
+    position: fixed;
+    right: 175px;
+    bottom: 17px;
+    z-index: 10001;
+    background: #24263a;
+    border: 1px solid #2f324d;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .6);
+    border-radius: 12px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 14px;
+    line-height: 1.2;
+    padding: 10px 12px;
+    gap: 6px;
+  }
+
+  #settingsDrawer {
+    position: fixed;
+    top: 0;
+    right: -280px;
+    width: 260px;
+    max-width: 80vw;
+    height: 100vh;
+    background: #1a1b25;
+    border-left: 1px solid #2f324d;
+    box-shadow: 0 0 30px rgba(0, 0, 0, .8);
+    z-index: 10002;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: right .25s ease;
+    color: #fff;
+    font-family: Arial, sans-serif;
+  }
+  body.settingsdrawer-open #battleDrawerBackdrop {
+    display: block;
+  }
+
+  body.settingsdrawer-open #settingsDrawer {
+    right: 0;
+  }
+
+  `);
+  function initSettingsDrawer() {
+    const bodyEl = document.body;
+
+    // 1️⃣ Prevent duplicate drawer
+    if (document.getElementById("settingsDrawer")) {
+      console.warn("Settings drawer already exists. Skipping injection.");
+    } else {
+      const original = document.getElementById("qsDrawer");
+      if (!original) {
+        console.error("Original Quick Sets drawer not found. Cannot clone.");
+        return;
+      }
+
+      // Clone drawer and update ID
+      const drawer = original.cloneNode(true);
+      drawer.id = "settingsDrawer";
+
+      // Update header
+      const titleEl = drawer.querySelector(".title");
+      const subtitleEl = drawer.querySelector(".subtitle");
+      if (titleEl) titleEl.textContent = "Dungeon Settings";
+      if (subtitleEl)
+        subtitleEl.textContent =
+          "Global settings for various plugins and userscripts developed by koenrad for the SEREPH guild";
+
+      // Update close button
+      const closeBtn = drawer.querySelector(".qs-drawer-close");
+      if (closeBtn) closeBtn.id = "closeSettingsDrawerBtn";
+
+      // Replace list with container for future settings buttons
+      const listEl = drawer.querySelector(".qs-list");
+      if (listEl) {
+        listEl.innerHTML = `
+          <div id="settingsDrawerContainer" style="display:flex;flex-direction:column;gap:8px;"></div>
+        `;
+      }
+
+      // Insert drawer next to original
+      original.insertAdjacentElement("afterend", drawer);
+    }
+
+    // 2️⃣ Prevent duplicate trigger button
+    if (!document.getElementById("openSettingsDrawerBtn")) {
+      const originalBtn = document.getElementById("openQuickSetDrawerBtn");
+      if (!originalBtn) {
+        console.error("Original Quick Sets trigger button not found.");
+        return;
+      }
+
+      const btn = originalBtn.cloneNode(true);
+      btn.id = "openSettingsDrawerBtn";
+
+      // Remove old classes and add new
+      btn.className = "";
+      btn.classList.add("settings-drawer-trigger");
+
+      btn.title = "Dungeon Settings";
+      btn.textContent = "⚙️";
+
+      originalBtn.insertAdjacentElement("afterend", btn);
+    }
+
+    // 3️⃣ Wire open/close logic
+    const openBtn = document.getElementById("openSettingsDrawerBtn");
+    const closeBtn = document.getElementById("closeSettingsDrawerBtn");
+    const backdrop = document.getElementById("battleDrawerBackdrop");
+
+    if (!openBtn || !closeBtn || !backdrop) return;
+
+    function openDrawer() {
+      bodyEl.classList.add("settingsdrawer-open");
+    }
+    function closeDrawer() {
+      bodyEl.classList.remove("settingsdrawer-open");
+      window.location.reload();
+    }
+
+    openBtn.addEventListener("click", openDrawer);
+    closeBtn.addEventListener("click", closeDrawer);
+    backdrop.addEventListener("click", closeDrawer);
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeDrawer();
+    });
+  }
+
+  /**
+   * Adds a settings group to the Settings Drawer container.
+   *
+   * @param {string} groupId - Unique ID for the group.
+   * @param {string} title - The title of the group.
+   * @param {string} subtitle - The subtitle/description of the group.
+   * @param {HTMLElement|HTMLElement[]} elements - One or more HTML elements to append under the title/subtitle.
+   * @returns {HTMLElement} - The created group element.
+   */
+  function addSettingsGroup(groupId, title, subtitle, elements) {
+    const container = document.getElementById("settingsDrawerContainer");
+    if (!container) {
+      console.error(
+        "Settings drawer container not found. Make sure initSettingsDrawer() has run."
+      );
+      return null;
+    }
+
+    if (document.getElementById(groupId)) {
+      console.warn(
+        `Settings group with id "${groupId}" already exists. Skipping creation.`
+      );
+      return document.getElementById(groupId);
+    }
+
+    // Ensure elements is an array
+    if (!Array.isArray(elements)) elements = [elements];
+
+    // Create group wrapper
+    const group = document.createElement("div");
+    group.className = "settings-group";
+    group.id = groupId;
+    group.style.display = "flex";
+    group.style.flexDirection = "column";
+    group.style.gap = "6px";
+    group.style.padding = "8px 0";
+    group.style.borderBottom = "1px solid rgba(255,255,255,0.1)";
+
+    // Title
+    const titleEl = document.createElement("div");
+    titleEl.textContent = title;
+    titleEl.style.fontWeight = "700";
+    titleEl.style.fontSize = "14px";
+    group.appendChild(titleEl);
+
+    // Subtitle
+    if (subtitle) {
+      const subtitleEl = document.createElement("div");
+      subtitleEl.textContent = subtitle;
+      subtitleEl.style.fontSize = "12px";
+      subtitleEl.style.opacity = "0.7";
+      group.appendChild(subtitleEl);
+    }
+
+    // Append provided elements
+    elements.forEach((el) => group.appendChild(el));
+
+    // Append group to container
+    container.appendChild(group);
+
+    return group;
+  }
+
+  /**
+   * Adds elements to an existing settings group.
+   *
+   * @param {string} groupId - ID of the existing group.
+   * @param {HTMLElement|HTMLElement[]} elements - Element(s) to append to the group.
+   */
+  function addToSettingsGroup(groupId, elements) {
+    const group = document.getElementById(groupId);
+    if (!group) {
+      console.error(`Settings group with id "${groupId}" not found.`);
+      return;
+    }
+
+    if (!Array.isArray(elements)) elements = [elements];
+    elements.forEach((el) => group.appendChild(el));
+  }
+
+  /**
+   * Creates a persistent settings input bound to Storage.
+   *
+   * @param {Object} options
+   * @param {string} options.key           Storage key
+   * @param {string} options.label         Label text
+   * @param {string} [options.type]        Input type (checkbox, number, text, select, etc.)
+   * @param {*}      [options.defaultValue] Default value if none stored
+   * @param {Object} [options.inputProps]  Extra properties to assign to the input
+   * @param {Array}  [options.options]     Options for <select> [{ value, label }]
+   * @param {Function} [options.onChange]  Callback when value changes
+   *
+   * @returns {{ container: HTMLElement, input: HTMLElement }}
+   */
+  function createSettingsInput({
+    key,
+    label,
+    type = "checkbox",
+    defaultValue = null,
+    inputProps = {},
+    options = [],
+    onChange = null,
+  }) {
+    if (!key || !label) {
+      throw new Error("createSettingsInput requires both key and label");
+    }
+
+    // Load stored value
+    const storedValue = Storage.get(key, defaultValue);
+
+    // Container
+    const container = document.createElement("label");
+    container.className = "settings-input";
+    container.style.display = "flex";
+    container.style.alignItems = "center";
+    container.style.gap = "8px";
+    container.style.cursor = "pointer";
+    container.style.marginTop = "6px";
+
+    // Label text
+    const textEl = document.createElement("span");
+    textEl.textContent = label;
+    textEl.style.marginLeft = "5px";
+    textEl.style.marginRight = "5px";
+
+    let input;
+
+    // ----- Create input -----
+    if (type === "select") {
+      input = document.createElement("select");
+
+      options.forEach(({ value, label }) => {
+        const opt = document.createElement("option");
+        opt.value = value;
+        opt.textContent = label;
+        input.appendChild(opt);
+      });
+
+      input.value = storedValue;
+    } else {
+      input = document.createElement("input");
+      input.type = type;
+      input.style.marginLeft = "5px";
+      input.style.marginRight = "5px";
+
+      if (type === "checkbox") {
+        input.checked = Boolean(storedValue);
+      } else if (storedValue !== null) {
+        input.value = storedValue;
+      }
+    }
+
+    // Assign extra properties
+    Object.assign(input, inputProps);
+
+    // Tag input for discovery
+    input.dataset.settingKey = key;
+
+    // ----- Persistence -----
+    const getValue = () => {
+      if (type === "checkbox") return input.checked;
+      if (type === "number") return Number(input.value);
+      return input.value;
+    };
+
+    input.addEventListener("change", () => {
+      const value = getValue();
+      Storage.set(key, value);
+
+      if (typeof onChange === "function") {
+        onChange(value, input);
+      }
+    });
+
+    input.id = key;
+
+    // Optional slider styling compatibility
+    if (type === "checkbox") {
+      container.classList.add("switch-label");
+      const slider = document.createElement("span");
+      slider.className = "slider";
+
+      const labelText = document.createElement("span");
+      labelText.textContent = label;
+
+      container.appendChild(input); // 👈 input first
+      container.appendChild(slider); // 👈 slider immediately after
+      container.appendChild(labelText); // 👈 text last
+    } else {
+      // Assemble
+      container.appendChild(textEl);
+      container.appendChild(input);
+    }
+
+    return { container, input };
+  }
+
+  // Run settings initializer
+  initSettingsDrawer();
+
+  // Make Settings Helpers Public
+  window.addSettingsGroup = addSettingsGroup;
+  window.addToSettingsGroup = addToSettingsGroup;
+  window.createSettingsInput = createSettingsInput;
+
+  // ------------------------ Settings Drawer --------------------------- //
+
   // ---------------------------- Top Bar ------------------------------- //
   const gtbleft = document.querySelector(".gtb-left");
   if (gtbleft) {
@@ -183,43 +563,68 @@
   // ---------------------------- Top Bar ------------------------------- //
 
   // -------------------- Menu Sidebar / Navigation -------------------- //
-  // Find the Halloween Event link by its icon or label
-  const halloweenLink = [...document.querySelectorAll(".side-nav-item")].find(
-    (el) =>
-      el.querySelector(".side-label")?.textContent.trim() === "Halloween Event"
+
+  const { container: useCustomNavigationToggle } = createSettingsInput({
+    key: "ui-improvements:useCustomNavigation",
+    label: "Custom Navigation",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
+  addSettingsGroup("global", "Global Settings", "Global settings", [
+    useCustomNavigationToggle,
+  ]);
+
+  const useCustomNavigation = Storage.get(
+    "ui-improvements:useCustomNavigation",
+    true
   );
 
-  // Move halloween event link to the bottom of the menu
-  if (halloweenLink) {
-    addMenuLinkAfter(
-      "Battle Pass",
-      halloweenLink.href,
-      halloweenLink.querySelector(".side-label").textContent,
-      halloweenLink.querySelector(".side-icon").textContent
+  if (useCustomNavigation) {
+    // Find the event link by its label
+    const eventLink = [...document.querySelectorAll(".side-nav-item")].find(
+      (el) =>
+        el.querySelector(".side-label")?.textContent.trim() === "New Year Event"
     );
-    halloweenLink.remove();
-  }
 
-  // Find the "Home" link by its label text
-  const homeLink = [...document.querySelectorAll(".side-nav-item")].find(
-    (el) => el.querySelector(".side-label")?.textContent.trim() === "Home"
-  );
+    // Move New Year Event link to the bottom of the menu
+    if (eventLink) {
+      addMenuLinkAfter(
+        "Battle Pass",
+        eventLink.href,
+        eventLink.querySelector(".side-label").textContent,
+        eventLink.querySelector(".side-icon").textContent
+      );
+      eventLink.remove();
+    }
 
-  if (homeLink) {
-    addMenuLinkAfter("Home", "/active_wave.php?gate=3&wave=8", "Wave 3", "🌊");
-    addMenuLinkAfter(
-      "Wave 3",
-      "/adventurers_guild.php",
-      "Adventurer's Guild",
-      "🛡️"
+    // Find the "Home" link by its label text
+    const homeLink = [...document.querySelectorAll(".side-nav-item")].find(
+      (el) => el.querySelector(".side-label")?.textContent.trim() === "Home"
     );
-    addMenuLinkAfter(
-      "Blacksmith",
-      "/legendary_forge.php",
-      "Legendary Forge",
-      "🔥"
-    );
-    addMenuLinkAfter("Guild", "/guild_dungeon.php", "Guild Dungeons", "🕳️");
+
+    if (homeLink) {
+      addMenuLinkAfter(
+        "Home",
+        "/active_wave.php?gate=3&wave=8",
+        "Wave 3",
+        "🌊"
+      );
+      addMenuLinkAfter(
+        "Wave 3",
+        "/adventurers_guild.php",
+        "Adventurer's Guild",
+        "🛡️"
+      );
+      addMenuLinkAfter(
+        "Blacksmith",
+        "/legendary_forge.php",
+        "Legendary Forge",
+        "🔥"
+      );
+      addMenuLinkAfter("Guild", "/guild_dungeon.php", "Guild Dungeons", "🕳️");
+    }
   }
   // -------------------- Menu Sidebar / Navigation -------------------- //
 
@@ -231,6 +636,38 @@
   // --------------------- Adventurer's Guild Page --------------------- //
 
   // ------------------------ Battle Pass Page ------------------------- //
+
+  const { container: syncBattlePassScrollbarsToggle } = createSettingsInput({
+    key: "ui-improvements:syncBattlePassScrollbars",
+    label: "Sync Scrollbars",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
+  const { container: scrollToCurrentLevelToggle } = createSettingsInput({
+    key: "ui-improvements:scrollToCurrentLevel",
+    label: "Auto Scroll to Current Level",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
+  addSettingsGroup(
+    "battlepass-page",
+    "BattlePass Settings",
+    "Settings related to the Battlepass page",
+    [syncBattlePassScrollbarsToggle, scrollToCurrentLevelToggle]
+  );
+
+  const syncBattlePassScrollbars = Storage.get(
+    "ui-improvements:syncBattlePassScrollbars",
+    true
+  );
+  const scrollToCurrentLevel = Storage.get(
+    "ui-improvements:scrollToCurrentLevel",
+    true
+  );
 
   // sync scroll bars
   function syncScrollBars() {
@@ -308,9 +745,13 @@
   async function autoScrollToCurrentLevel() {
     const level = getHighestReachedLevel();
     if (!level) return;
-    scrollToLevel(level);
+    if (scrollToCurrentLevel) {
+      scrollToLevel(level);
+    }
     await sleep(1000);
-    syncScrollBars();
+    if (syncBattlePassScrollbars) {
+      syncScrollBars();
+    }
   }
 
   setTimeout(() => {
@@ -320,6 +761,67 @@
   // ------------------------ Battle Pass Page ------------------------- //
 
   // -------------------------- Wave X Page ---------------------------- //
+
+  const { container: enableCustomAttackStrategyToggle } = createSettingsInput({
+    key: "ui-improvements:enableCustomAttackStrategy",
+    label: "Strategic Attack",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+  const { container: enableLootXFasterToggle } = createSettingsInput({
+    key: "ui-improvements:enableLootXFaster",
+    label: "Faster Loot X",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+  const { container: enableInBattleCountToggle } = createSettingsInput({
+    key: "ui-improvements:enableInBattleCount",
+    label: "In Battle Count",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+  const { container: showHpBarToggle, input: hpBarInput } = createSettingsInput(
+    {
+      key: "ui-improvements:showHpBar",
+      label: "Show HP Bar",
+      defaultValue: true,
+      type: "checkbox",
+      inputProps: { slider: true },
+    }
+  );
+
+  const { container: hpBarColorContainer } = createSettingsInput({
+    key: "ui-improvements:hpBarColor",
+    label: "HP Bar Color",
+    defaultValue: true,
+    type: "color",
+  });
+
+  let showHpBar = hpBarInput.checked;
+  hpBarColorContainer.style.display = showHpBar ? "inline-block" : "none";
+
+  hpBarInput.addEventListener("change", () => {
+    console.log("changed!");
+    showHpBar = hpBarInput.checked;
+    hpBarColorContainer.style.display = showHpBar ? "inline-block" : "none";
+  });
+
+  addSettingsGroup(
+    "wave-page",
+    "Wave Page",
+    "Settings related to the wave page.",
+    [
+      enableCustomAttackStrategyToggle,
+      enableInBattleCountToggle,
+      enableLootXFasterToggle,
+      showHpBarToggle,
+      hpBarColorContainer,
+    ]
+  );
+
   if (window.location.href.includes("/active_wave.php")) {
     // ---------------- constants ------------------ //
     let inBattleCount = 0;
@@ -327,120 +829,132 @@
     const HIDE_DEAD_MONSTERS = hideDeadRaw === "1" || hideDeadRaw === "true";
 
     // -------------- Loot X Faster ---------------- //
-    function overrideLootX() {
-      const btnLootX = document.getElementById("btnLootX");
-      if (btnLootX) {
-        const customBtn = document.createElement("button");
-        customBtn.id = "btnCustomLoot";
-        customBtn.type = "button";
-        customBtn.className = "custom-loot-btn";
-        customBtn.textContent = "💰 Loot X monsters (super fast)";
+    const enableLootXFaster = Storage.get(
+      "ui-improvements:enableLootXFaster",
+      true
+    );
+    if (enableLootXFaster) {
+      function overrideLootX() {
+        const btnLootX = document.getElementById("btnLootX");
+        if (btnLootX) {
+          const customBtn = document.createElement("button");
+          customBtn.id = "btnCustomLoot";
+          customBtn.type = "button";
+          customBtn.className = "custom-loot-btn";
+          customBtn.textContent = "💰 Loot X monsters (super fast)";
 
-        btnLootX.insertAdjacentElement("afterend", customBtn);
-        btnLootX.textContent = "💰 Loot X monsters (vanilla)";
+          btnLootX.insertAdjacentElement("afterend", customBtn);
+          btnLootX.textContent = "💰 Loot X monsters (vanilla)";
 
-        customBtn?.addEventListener("click", async () => {
-          const n = Math.max(1, parseInt($input.value || "1", 10));
-          const eligibleEls = Array.from(
-            document.querySelectorAll('.monster-card[data-eligible="1"]')
-          );
-          const targetIds = eligibleEls
-            .slice(0, n)
-            .map((el) => parseInt(el.dataset.monsterId, 10))
-            .filter(Boolean);
+          customBtn?.addEventListener("click", async () => {
+            const n = Math.max(1, parseInt($input.value || "1", 10));
+            const eligibleEls = Array.from(
+              document.querySelectorAll('.monster-card[data-eligible="1"]')
+            );
+            const targetIds = eligibleEls
+              .slice(0, n)
+              .map((el) => parseInt(el.dataset.monsterId, 10))
+              .filter(Boolean);
 
-          if (targetIds.length === 0) {
-            $stat.textContent = "No eligible dead monsters you joined.";
-            return;
-          }
-
-          setRunning(true);
-          let ok = 0,
-            fail = 0;
-          let totalExp = 0,
-            totalGold = 0;
-          const allItems = [];
-          const allNotes = [];
-          const promises = targetIds.map(async (targetId, i) => {
-            $stat.textContent = `Looting ${i + 1}/${
-              targetIds.length
-            }... (success: ${ok}, fail: ${fail})`;
-
-            try {
-              const res = await lootOne(targetId);
-
-              if (res.ok) {
-                ok++;
-                totalExp += res.exp;
-                totalGold += res.gold;
-
-                if (res.items?.length) {
-                  allItems.push(...res.items);
-                } else if (res.note) {
-                  allNotes.push(res.note);
-                }
-
-                const el = document.querySelector(
-                  `.monster-card[data-monster-id="${targetId}"]`
-                );
-                if (el) el.setAttribute("data-eligible", "0");
-              } else {
-                fail++;
-                if (res.note) allNotes.push(res.note);
-              }
-            } catch {
-              fail++;
-              allNotes.push("Server error");
+            if (targetIds.length === 0) {
+              $stat.textContent = "No eligible dead monsters you joined.";
+              return;
             }
-          });
 
-          await Promise.all(promises);
-          $stat.textContent = `Done. Looted ${ok}, failed ${fail}.`;
-          setRunning(false);
-          openBatchLootModal(
-            {
-              processed: targetIds.length,
-              success: ok,
-              fail,
-              exp: totalExp,
-              gold: totalGold,
-            },
-            allItems,
-            allNotes
-          );
-        });
+            setRunning(true);
+            let ok = 0,
+              fail = 0;
+            let totalExp = 0,
+              totalGold = 0;
+            const allItems = [];
+            const allNotes = [];
+            const promises = targetIds.map(async (targetId, i) => {
+              $stat.textContent = `Looting ${i + 1}/${
+                targetIds.length
+              }... (success: ${ok}, fail: ${fail})`;
+
+              try {
+                const res = await lootOne(targetId);
+
+                if (res.ok) {
+                  ok++;
+                  totalExp += res.exp;
+                  totalGold += res.gold;
+
+                  if (res.items?.length) {
+                    allItems.push(...res.items);
+                  } else if (res.note) {
+                    allNotes.push(res.note);
+                  }
+
+                  const el = document.querySelector(
+                    `.monster-card[data-monster-id="${targetId}"]`
+                  );
+                  if (el) el.setAttribute("data-eligible", "0");
+                } else {
+                  fail++;
+                  if (res.note) allNotes.push(res.note);
+                }
+              } catch {
+                fail++;
+                allNotes.push("Server error");
+              }
+            });
+
+            await Promise.all(promises);
+            $stat.textContent = `Done. Looted ${ok}, failed ${fail}.`;
+            setRunning(false);
+            openBatchLootModal(
+              {
+                processed: targetIds.length,
+                success: ok,
+                fail,
+                exp: totalExp,
+                gold: totalGold,
+              },
+              allItems,
+              allNotes
+            );
+          });
+        }
       }
+      overrideLootX();
     }
-    overrideLootX();
     // -------------- Loot X Faster ---------------- //
 
     // --------- In Battle Count Injection ------------//
-    const calculateInBattle = () => {
-      const monsterCards = document.querySelectorAll(".monster-card");
+    const enableInBattleCount = Storage.get(
+      "ui-improvements:enableInBattleCount",
+      true
+    );
+    if (enableInBattleCount) {
+      const calculateInBattle = () => {
+        const monsterCards = document.querySelectorAll(".monster-card");
 
-      let joinedCount = 0;
+        let joinedCount = 0;
 
-      monsterCards.forEach((card) => {
-        if (card.dataset.joined === "1") {
-          joinedCount++;
-        }
-      });
-      return HIDE_DEAD_MONSTERS ? joinedCount : "??";
-    };
+        monsterCards.forEach((card) => {
+          if (card.dataset.joined === "1") {
+            joinedCount++;
+          }
+        });
+        return HIDE_DEAD_MONSTERS ? joinedCount : "??";
+      };
 
-    inBattleCount = calculateInBattle();
+      inBattleCount = calculateInBattle();
 
-    const blLeft = document.querySelector(".bl-left");
-    if (blLeft) {
-      const inBattleDiv = document.createElement("div");
-      const count = document.createElement("span");
-      count.className = "count";
-      count.id = "in-battle-count";
-      count.textContent = inBattleCount.toString();
-      inBattleDiv.className = "unclaimed-pill";
-      inBattleDiv.textContent = `💪 In Battle:`;
-      inBattleDiv.appendChild(count);
-      blLeft.appendChild(inBattleDiv);
+      const blLeft = document.querySelector(".bl-left");
+      if (blLeft) {
+        const inBattleDiv = document.createElement("div");
+        const count = document.createElement("span");
+        count.className = "count";
+        count.id = "in-battle-count";
+        count.textContent = inBattleCount.toString();
+        inBattleDiv.className = "unclaimed-pill";
+        inBattleDiv.textContent = `💪 In Battle:`;
+        inBattleDiv.appendChild(count);
+        blLeft.appendChild(inBattleDiv);
+      }
     }
     // --------- In Battle Count Injection End ---------//
 
@@ -1325,20 +1839,26 @@
     }
 
     (function injectAttackSettings() {
-      const actions = document.querySelector(".qol-select-actions");
-      if (!actions) return;
+      const enableCustomAttackStrategy = Storage.get(
+        "ui-improvements:enableCustomAttackStrategy",
+        true
+      );
+      if (enableCustomAttackStrategy) {
+        const actions = document.querySelector(".qol-select-actions");
+        if (!actions) return;
 
-      // Prevent duplicates
-      if (actions.querySelector(".btnAttackSettings")) return;
+        // Prevent duplicates
+        if (actions.querySelector(".btnAttackSettings")) return;
 
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "btn btnAttackSettings";
-      btn.textContent = "⚙️ 🧠 Settings";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn btnAttackSettings";
+        btn.textContent = "⚙️ 🧠 Settings";
 
-      actions.appendChild(btn);
+        actions.appendChild(btn);
 
-      btn.addEventListener("click", openAttackSettingsModal);
+        btn.addEventListener("click", openAttackSettingsModal);
+      }
     })();
 
     let strategyAttackBtn;
@@ -1367,117 +1887,125 @@
     }
 
     (async function injectAttackStratButton() {
-      const attacksWrap = document.querySelector(".qol-attacks");
-      if (!attacksWrap) return;
-
-      const useAsterion = Storage.get("ui-improvements:useAsterion") || false;
-      if (useAsterion) {
-        updateAttackButtons();
-      }
-
-      // Prevent duplicate injection
-      if (attacksWrap.querySelector(".btnAttackStrat")) return;
-
-      let useDamageLimit = Storage.get("ui-improvements:useDamageLimit", false);
-      let damageLimitValue = parseFloat(
-        Storage.get("ui-improvements:damageLimitValue") || 0
+      const enableCustomAttackStrategy = Storage.get(
+        "ui-improvements:enableCustomAttackStrategy",
+        true
       );
+      if (enableCustomAttackStrategy) {
+        const attacksWrap = document.querySelector(".qol-attacks");
+        if (!attacksWrap) return;
 
-      let newButtonString = `🧠 Quick Join & Attack (${getAttackStrategyCost(
-        attackStrategy
-      )}) `;
-
-      if (useDamageLimit) {
-        newButtonString += `(limit ${formatShortNumber(damageLimitValue)})`;
-      }
-
-      strategyAttackBtn = document.createElement("button");
-      strategyAttackBtn.type = "button";
-      strategyAttackBtn.className = "btn btnAttackStrat";
-      strategyAttackBtn.textContent = newButtonString;
-
-      // Match styling but distinguish it
-      strategyAttackBtn.style.background = "#7c3aed";
-      strategyAttackBtn.style.borderColor = "#7c3aed";
-
-      attacksWrap.appendChild(strategyAttackBtn);
-
-      strategyAttackBtn.addEventListener("click", async () => {
-        const ids = getSelectedMonsterIds();
-        if (!ids.length) {
-          showStatus("Select at least 1 monster.");
-          return;
+        const useAsterion = Storage.get("ui-improvements:useAsterion") || false;
+        if (useAsterion) {
+          updateAttackButtons();
         }
 
-        if (!JOIN_URL || !ATTACK_URL) {
-          showStatus("Quick Join/Attack endpoints are not configured.");
-          return;
+        // Prevent duplicate injection
+        if (attacksWrap.querySelector(".btnAttackStrat")) return;
+
+        let useDamageLimit = Storage.get(
+          "ui-improvements:useDamageLimit",
+          false
+        );
+        let damageLimitValue = parseFloat(
+          Storage.get("ui-improvements:damageLimitValue") || 0
+        );
+
+        let newButtonString = `🧠 Quick Join & Attack (${getAttackStrategyCost(
+          attackStrategy
+        )}) `;
+
+        if (useDamageLimit) {
+          newButtonString += `(limit ${formatShortNumber(damageLimitValue)})`;
         }
 
-        setQuickBtnsRunning(true);
-        showStatus(`Running attack strategy on ${ids.length} monsters...`);
+        strategyAttackBtn = document.createElement("button");
+        strategyAttackBtn.type = "button";
+        strategyAttackBtn.className = "btn btnAttackStrat";
+        strategyAttackBtn.textContent = newButtonString;
 
-        const tasks = ids.map(async (id, i) => {
-          showStatus(
-            `(${i + 1}/${ids.length}) Strategy attacking monster #${id}...`
-          );
+        // Match styling but distinguish it
+        strategyAttackBtn.style.background = "#7c3aed";
+        strategyAttackBtn.style.borderColor = "#7c3aed";
 
-          const card = document.querySelector(
-            `.monster-card[data-monster-id="${id}"]`
-          );
+        attacksWrap.appendChild(strategyAttackBtn);
 
-          const alreadyJoined = card && card.dataset.joined === "1";
-
-          let joinRes = { ok: true, msg: "" };
-
-          if (!alreadyJoined) {
-            try {
-              joinRes = await doJoin(id);
-            } catch {
-              joinRes = { ok: false, msg: "Join request failed" };
-            }
-
-            if (!joinRes.ok) {
-              const msgEl = document.createElement("div");
-              msgEl.textContent = "Skipped (join failed)";
-
-              return {
-                monsterId: id,
-                joinMsg: joinRes.msg,
-                ok: false,
-                msgEl,
-              };
-            }
-
-            if (card) {
-              card.dataset.joined = "1";
-              card.dataset.unjoined = "0";
-            }
+        strategyAttackBtn.addEventListener("click", async () => {
+          const ids = getSelectedMonsterIds();
+          if (!ids.length) {
+            showStatus("Select at least 1 monster.");
+            return;
           }
 
-          const atkResults = await performAttackStrat(id, attackStrategy);
-
-          const resultsEl = document.createElement("div");
-          for (const result of atkResults) {
-            resultsEl.appendChild(result.msgEl);
+          if (!JOIN_URL || !ATTACK_URL) {
+            showStatus("Quick Join/Attack endpoints are not configured.");
+            return;
           }
 
-          return {
-            monsterId: id,
-            joinMsg: joinRes.msg,
-            ok: atkResults.every((r) => r.ok),
-            msgEl: resultsEl,
-          };
+          setQuickBtnsRunning(true);
+          showStatus(`Running attack strategy on ${ids.length} monsters...`);
+
+          const tasks = ids.map(async (id, i) => {
+            showStatus(
+              `(${i + 1}/${ids.length}) Strategy attacking monster #${id}...`
+            );
+
+            const card = document.querySelector(
+              `.monster-card[data-monster-id="${id}"]`
+            );
+
+            const alreadyJoined = card && card.dataset.joined === "1";
+
+            let joinRes = { ok: true, msg: "" };
+
+            if (!alreadyJoined) {
+              try {
+                joinRes = await doJoin(id);
+              } catch {
+                joinRes = { ok: false, msg: "Join request failed" };
+              }
+
+              if (!joinRes.ok) {
+                const msgEl = document.createElement("div");
+                msgEl.textContent = "Skipped (join failed)";
+
+                return {
+                  monsterId: id,
+                  joinMsg: joinRes.msg,
+                  ok: false,
+                  msgEl,
+                };
+              }
+
+              if (card) {
+                card.dataset.joined = "1";
+                card.dataset.unjoined = "0";
+              }
+            }
+
+            const atkResults = await performAttackStrat(id, attackStrategy);
+
+            const resultsEl = document.createElement("div");
+            for (const result of atkResults) {
+              resultsEl.appendChild(result.msgEl);
+            }
+
+            return {
+              monsterId: id,
+              joinMsg: joinRes.msg,
+              ok: atkResults.every((r) => r.ok),
+              msgEl: resultsEl,
+            };
+          });
+
+          // 🔑 WAIT FOR ALL MONSTERS TO FINISH
+          const results = await Promise.all(tasks);
+
+          showStatus("Strategy complete.");
+          setQuickBtnsRunning(false);
+          openBatchAttackModal(results);
         });
-
-        // 🔑 WAIT FOR ALL MONSTERS TO FINISH
-        const results = await Promise.all(tasks);
-
-        showStatus("Strategy complete.");
-        setQuickBtnsRunning(false);
-        openBatchAttackModal(results);
-      });
-
+      }
       // --------- Inject Hp Bar --------- //
       renderHpBar();
     })();
@@ -1485,7 +2013,7 @@
     // ------------- Custom Attack Strategy ------------//
 
     // --------- Group Mobs in their own row ----------- //
-    const useGroupedMobs = Storage.get("useGroupedMobs", false);
+    const useGroupedMobs = Storage.get("ui-imrovements:useGroupedMobs", false);
 
     (function groupMobs() {
       const capCheckbox = document.getElementById("fCapNotReached");
@@ -1499,7 +2027,7 @@
       checkbox.id = "fUseGroups";
 
       // Initialize from storage
-      checkbox.checked = !!Storage.get("useGroupedMobs", false);
+      checkbox.checked = !!Storage.get("ui-imrovements:useGroupedMobs", false);
 
       label.appendChild(checkbox);
       label.appendChild(document.createTextNode(" Use Groups"));
@@ -1510,7 +2038,7 @@
 
       // Change handler
       checkbox.addEventListener("change", (e) => {
-        Storage.set("useGroupedMobs", e.target.checked);
+        Storage.set("ui-imrovements:useGroupedMobs", e.target.checked);
         window.location.reload();
       });
 
@@ -1567,10 +2095,31 @@
         }
       }
     })();
+    // --------- Group Mobs in their own row ----------- //
   }
   // -------------------------- Wave X Page ---------------------------- //
 
   // ---------------------------- Merchant ----------------------------- //
+
+  const { container: enableBuyMaxButtonsToggle } = createSettingsInput({
+    key: "ui-improvements:enableBuyAllButtons",
+    label: "Buy {Max} Buttons",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
+  addSettingsGroup(
+    "merchant-page",
+    "Merchant",
+    "Settings related to the merchant page.",
+    [enableBuyMaxButtonsToggle]
+  );
+
+  const enableBuyAllButons = Storage.get(
+    "ui-improvements:enableBuyAllButtons",
+    true
+  );
 
   function getGoldBalance() {
     const el = document.getElementById("goldBalance");
@@ -1674,36 +2223,9 @@
     });
   }
 
-  const fullStaminaCard = document.querySelector('.card[data-merch-id="10"]');
-
-  if (fullStaminaCard) {
-    const actions = fullStaminaCard.querySelector(".actions");
-
-    // Prevent duplicate injection
-    if (!actions.querySelector(".qty-wrap")) {
-      const qtyWrap = document.createElement("div");
-      qtyWrap.className = "qty-wrap";
-      qtyWrap.setAttribute("aria-label", "Quantity");
-
-      qtyWrap.innerHTML = `
-      <button type="button" class="qty-btn minus" tabindex="-1">−</button>
-      <input type="number"
-             class="qty-input"
-             min="1"
-             step="1"
-             value="1"
-             inputmode="numeric"
-             pattern="[0-9]*"
-             aria-label="Quantity">
-      <button type="button" class="qty-btn plus" tabindex="-1">+</button>
-    `;
-
-      // Insert before Buy button
-      actions.prepend(qtyWrap);
-    }
+  if (enableBuyAllButons) {
+    injectBuyX();
   }
-
-  injectBuyX();
 
   // ---------------------------- Merchant ----------------------------- //
 
@@ -1726,7 +2248,32 @@
   // ------------------------- Battle Side Bar ------------------------- //
 
   // ----------------------- Guild Member's List ----------------------- //
-  if (window.location.href.includes("/guild_members.php")) {
+  const { container: enableGuildMemberListSortingToggle } = createSettingsInput(
+    {
+      key: "ui-improvements:enableGuildMemberListSorting",
+      label: "Guild Members Sorting",
+      defaultValue: true,
+      type: "checkbox",
+      inputProps: { slider: true },
+    }
+  );
+
+  addSettingsGroup(
+    "guild-management",
+    "Guild Management",
+    "Settings related to the guild pages.",
+    [enableGuildMemberListSortingToggle]
+  );
+
+  const enableGuildMemberListSorting = Storage.get(
+    "ui-improvements:enableGuildMemberListSorting",
+    true
+  );
+
+  if (
+    window.location.href.includes("/guild_members.php") &&
+    enableGuildMemberListSorting
+  ) {
     const table = document.querySelector("table");
     if (!table) return;
 
