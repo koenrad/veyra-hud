@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      1.0.28
+// @version      1.0.29
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -1724,4 +1724,84 @@
     lastElement.style.marginBottom = "100px";
   })();
   // ------------------------- Battle Side Bar ------------------------- //
+
+  // ----------------------- Guild Member's List ----------------------- //
+  if (window.location.href.includes("/guild_members.php")) {
+    const table = document.querySelector("table");
+    if (!table) return;
+
+    const tbody = table.querySelector("tbody");
+    const headers = Array.from(table.querySelectorAll("th"));
+
+    // Custom role priority
+    const roleOrder = {
+      leader: 1,
+      vice: 2,
+      member: 3,
+    };
+
+    const getCellValue = (tr, idx) => tr.children[idx].innerText.trim();
+
+    const parseValue = (value, colIndex) => {
+      // Role column (index 1)
+      if (colIndex === 1) {
+        return roleOrder[value.toLowerCase()] ?? 99;
+      }
+
+      // Numbers (remove commas)
+      const num = value.replace(/,/g, "");
+      if (!isNaN(num) && num !== "") return Number(num);
+
+      // Dates
+      const date = Date.parse(value);
+      if (!isNaN(date)) return new Date(date);
+
+      // Text
+      return value.toLowerCase();
+    };
+
+    const clearCarets = () => {
+      headers.forEach((th) => {
+        th.innerHTML = th.innerHTML.replace(/\s*[▲▼]$/, "");
+      });
+    };
+
+    const sortTable = (colIndex, asc, showCaret = true) => {
+      const rows = Array.from(tbody.querySelectorAll("tr"));
+
+      rows.sort((a, b) => {
+        const A = parseValue(getCellValue(a, colIndex), colIndex);
+        const B = parseValue(getCellValue(b, colIndex), colIndex);
+
+        if (A > B) return asc ? 1 : -1;
+        if (A < B) return asc ? -1 : 1;
+        return 0;
+      });
+
+      if (showCaret) {
+        clearCarets();
+        headers[colIndex].innerHTML =
+          headers[colIndex].innerText + (asc ? " ▲" : " ▼");
+      }
+
+      rows.forEach((tr) => tbody.appendChild(tr));
+    };
+
+    // Enable click sorting on all headers
+    headers.forEach((th, index) => {
+      let asc = true;
+      th.style.cursor = "pointer";
+      th.title = "Click to sort";
+
+      th.addEventListener("click", () => {
+        sortTable(index, asc);
+        asc = !asc;
+      });
+    });
+
+    // 🔥 DEFAULT SORT: Role → Leader, Vice, Member (ASC)
+    sortTable(1, true, true);
+  }
+
+  // ----------------------- Guild Member's List ----------------------- //
 })();

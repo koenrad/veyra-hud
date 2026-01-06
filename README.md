@@ -61,6 +61,9 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
 - Merchant
   - Adds a buy {max} button to each item in stock so you can buy the max available
   - Adds a quantity input box for purchase of FSP using gems
+- Guild Members List
+  - Adds sorting to all columns
+  - Defaults sort by Role (vanilla behaviour)
 
 ### filter-inventory.js
 
