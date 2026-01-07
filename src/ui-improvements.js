@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.0.3
+// @version      2.0.4
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -364,14 +364,24 @@
   // ------------------------ Battle Pass Page ------------------------- //
 
   // -------------------------- Wave X Page ---------------------------- //
-
-  const { container: enableCustomAttackStrategyToggle } = createSettingsInput({
+  const {
+    container: enableCustomAttackStrategyToggle,
+    input: enableCustomAttackStrategyInput,
+  } = createSettingsInput({
     key: "ui-improvements:enableCustomAttackStrategy",
     label: "Strategic Attack",
     defaultValue: true,
     type: "checkbox",
     inputProps: { slider: true },
   });
+  const { container: useParallelJoinsToggle, input: useParallelJoinsInput } =
+    createSettingsInput({
+      key: "ui-improvements:useParallelJoins",
+      label: "Join Mobs in Parallel",
+      defaultValue: true,
+      type: "checkbox",
+      inputProps: { slider: true },
+    });
   const { container: enableLootXFasterToggle } = createSettingsInput({
     key: "ui-improvements:enableLootXFaster",
     label: "Faster Loot X",
@@ -407,9 +417,20 @@
   hpBarColorContainer.style.display = showHpBar ? "inline-block" : "none";
 
   hpBarInput.addEventListener("change", () => {
-    console.log("changed!");
     showHpBar = hpBarInput.checked;
     hpBarColorContainer.style.display = showHpBar ? "inline-block" : "none";
+  });
+
+  let showUseParallelToggle = enableCustomAttackStrategyInput.checked;
+  useParallelJoinsToggle.style.display = showUseParallelToggle
+    ? "flex"
+    : "none";
+
+  enableCustomAttackStrategyInput.addEventListener("change", () => {
+    showUseParallelToggle = enableCustomAttackStrategyInput.checked;
+    useParallelJoinsToggle.style.display = showUseParallelToggle
+      ? "flex"
+      : "none";
   });
 
   addSettingsGroup(
@@ -418,6 +439,7 @@
     "Settings related to the wave page.",
     [
       enableCustomAttackStrategyToggle,
+      useParallelJoinsToggle,
       enableInBattleCountToggle,
       enableLootXFasterToggle,
       showHpBarToggle,
@@ -567,7 +589,6 @@
     const ATTACK_URL = ENDPOINTS && ENDPOINTS.ATTACK ? ENDPOINTS.ATTACK : "";
 
     let attackStrategy = Storage.get("ui-improvements:attackStrategy", []);
-    let showHpBar = Storage.get("ui-improvements:showHpBar", true);
 
     GM_addStyle(`
       .attack-strat-overlay {
@@ -1155,17 +1176,22 @@
       let damageLimitValue = parseFloat(
         Storage.get("ui-improvements:damageLimitValue") || 0
       );
-      showHpBar = Storage.get("ui-improvements:showHpBar", true);
-      let hpBarColor = Storage.get("ui-improvements:hpBarColor", "#55ff55");
+      let useParallelJoins = Storage.get(
+        "ui-improvements:useParallelJoins",
+        true
+      );
+
       // ---------- Helpers ----------
       function save() {
         Storage.set("ui-improvements:attackStrategy", attackStrategy);
         Storage.set("ui-improvements:useAsterion", useAsterion);
         Storage.set("ui-improvements:asterionValue", asterionValue);
-        Storage.set("ui-improvements:showHpBar", showHpBar);
         Storage.set("ui-improvements:useDamageLimit", useDamageLimit);
         Storage.set("ui-improvements:damageLimitValue", damageLimitValue);
-        Storage.set("ui-improvements:hpBarColor", hpBarColor);
+
+        Storage.set("ui-improvements:useParallelJoins", useParallelJoins);
+        useParallelJoinsInput.checked = useParallelJoins;
+
         // update the strategic attack button on the main page
         let newButtonString = `🧠 Quick Join & Attack (${getAttackStrategyCost(
           attackStrategy
@@ -1281,53 +1307,38 @@
           meta.appendChild(damageLimitContainer);
         }
 
-        // ----------  Show HP Bar Settings Checkbox ----------
-        let hpbarSettingContainer = document.getElementById(
-          "hpbarSettingContainer"
+        // ----------  Parallel Joins Settings Checkbox ----------
+        let useParallelJoinsSettingsContainer = document.getElementById(
+          "useParallelJoinsSettingsContainer"
         );
-        if (!hpbarSettingContainer) {
-          hpbarSettingContainer = document.createElement("div");
-          hpbarSettingContainer.id = "hpbarSettingContainer";
-          hpbarSettingContainer.className = "hp-bar-settings-container";
+        if (!useParallelJoinsSettingsContainer) {
+          useParallelJoinsSettingsContainer = document.createElement("div");
+          useParallelJoinsSettingsContainer.id =
+            "useParallelJoinsSettingsContainer";
+          useParallelJoinsSettingsContainer.className =
+            "parallel-joins-settings-container";
 
           // Checkbox container
           const checkbox = document.createElement("input");
           checkbox.type = "checkbox";
-          checkbox.id = "hpbarSettingCheckbox";
-          checkbox.checked = showHpBar;
+          checkbox.id = "parallelJoinsSettingCheckbox";
+          checkbox.checked = useParallelJoins;
           checkbox.className = "attack-strat-checkbox";
 
           const label = document.createElement("label");
-          label.htmlFor = "hpbarSettingCheckbox";
+          label.htmlFor = "parallelJoinsSettingCheckbox";
           label.className = "attack-strat-label";
-          label.textContent =
-            "Show HP Bar (performs 1 extra request to battle.php)";
-
-          const colorInput = document.createElement("input");
-          colorInput.type = "color";
-          colorInput.value = hpBarColor;
-          colorInput.style.marginLeft = "8px";
-          colorInput.style.display = showHpBar ? "inline-block" : "none";
+          label.textContent = "Join monsters in parallel (faster)";
 
           checkbox.addEventListener("change", () => {
-            showHpBar = checkbox.checked;
-            colorInput.style.display = showHpBar ? "inline-block" : "none";
-            renderHpBar();
+            useParallelJoins = checkbox.checked;
             save();
           });
 
-          colorInput.addEventListener("change", () => {
-            console.log("Selected color:", colorInput.value);
-            hpBarColor = colorInput.value;
-            renderHpBar();
-            save();
-          });
+          useParallelJoinsSettingsContainer.appendChild(checkbox);
+          useParallelJoinsSettingsContainer.appendChild(label);
 
-          hpbarSettingContainer.appendChild(checkbox);
-          hpbarSettingContainer.appendChild(label);
-          hpbarSettingContainer.appendChild(colorInput);
-
-          meta.appendChild(hpbarSettingContainer);
+          meta.appendChild(useParallelJoinsSettingsContainer);
         }
       }
 
@@ -1467,17 +1478,17 @@
     let strategyAttackBtn;
 
     function updateAttackButtons() {
-      console.log("updating attack buttons!");
+      // console.log("updating attack buttons!");
       const asterionValue =
         parseFloat(Storage.get("ui-improvements:asterionValue")) || 1;
       const useAsterion = Storage.get("ui-improvements:useAsterion") || false;
 
       const attackButtons = document.querySelectorAll(".btnQuickJoinAttack");
       if (attackButtons) {
-        console.log(attackButtons);
+        // console.log(attackButtons);
         attackButtons.forEach((btn) => {
           const text = btn.textContent.trim();
-          console.log(text);
+          // console.log(text);
 
           const cost = useAsterion
             ? Math.ceil(btn.dataset.stam * asterionValue)
@@ -1494,6 +1505,7 @@
         "ui-improvements:enableCustomAttackStrategy",
         true
       );
+
       if (enableCustomAttackStrategy) {
         const attacksWrap = document.querySelector(".qol-attacks");
         if (!attacksWrap) return;
@@ -1535,6 +1547,10 @@
 
         strategyAttackBtn.addEventListener("click", async () => {
           const ids = getSelectedMonsterIds();
+          const useParallelJoins = Storage.get(
+            "ui-improvements:useParallelJoins",
+            true
+          );
           if (!ids.length) {
             showStatus("Select at least 1 monster.");
             return;
@@ -1548,7 +1564,9 @@
           setQuickBtnsRunning(true);
           showStatus(`Running attack strategy on ${ids.length} monsters...`);
 
-          const tasks = ids.map(async (id, i) => {
+          const results = [];
+
+          const runTask = async (id, i) => {
             showStatus(
               `(${i + 1}/${ids.length}) Strategy attacking monster #${id}...`
             );
@@ -1558,7 +1576,6 @@
             );
 
             const alreadyJoined = card && card.dataset.joined === "1";
-
             let joinRes = { ok: true, msg: "" };
 
             if (!alreadyJoined) {
@@ -1571,7 +1588,6 @@
               if (!joinRes.ok) {
                 const msgEl = document.createElement("div");
                 msgEl.textContent = "Skipped (join failed)";
-
                 return {
                   monsterId: id,
                   joinMsg: joinRes.msg,
@@ -1599,10 +1615,18 @@
               ok: atkResults.every((r) => r.ok),
               msgEl: resultsEl,
             };
-          });
+          };
 
-          // 🔑 WAIT FOR ALL MONSTERS TO FINISH
-          const results = await Promise.all(tasks);
+          if (useParallelJoins) {
+            // ⚡ PARALLEL
+            const tasks = ids.map((id, i) => runTask(id, i));
+            results.push(...(await Promise.all(tasks)));
+          } else {
+            // 🐢 SEQUENTIAL
+            for (let i = 0; i < ids.length; i++) {
+              results.push(await runTask(ids[i], i));
+            }
+          }
 
           showStatus("Strategy complete.");
           setQuickBtnsRunning(false);
