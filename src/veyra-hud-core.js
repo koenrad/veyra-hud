@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Veyra Hud Core
 // @namespace    http://tampermonkey.net/
-// @version      1.0.1
+// @version      1.0.2
 // @description  Core functionality for veyra-hud
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
@@ -13,6 +13,10 @@
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getRandomDelay(min, max) {
+  return Math.random() * (max - min) + min;
 }
 
 function getCookie(name) {
@@ -49,6 +53,30 @@ function showNotification(msg, type = "success") {
   setTimeout(() => {
     note.style.display = "none";
   }, 3000);
+}
+
+function titleCase(str) {
+  return str
+    .toLowerCase()
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+async function sendWebhookMessage(webhookUrl, message) {
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: message }),
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+
+    console.log("Message sent!");
+  } catch (err) {
+    console.error("Webhook send failed:", err);
+  }
 }
 
 const Storage = {
