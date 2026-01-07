@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.0.1
+// @version      2.0.2
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -46,22 +46,7 @@
         border-color: red;
       }
     }
-  .set-tabs {
-    flex-wrap: wrap;
-  }
-  .game-topbar {
-    position: relative !important;
-  }
-  body {
-    padding-block: 0px !important;
-    padding-inline: 0px !important;
-    padding-top: 0px !important;
-  }
-  @media (max-width: 600px) {
-    body {
-        padding-top: 0px !important;
-    }
-  }
+    
   `);
 
   // ===============================
@@ -138,10 +123,40 @@
   }
 
   // ---------------------------- Top Bar ------------------------------- //
-  const gtbleft = document.querySelector(".gtb-left");
-  if (gtbleft) {
-    // wrap the top bar, even on small screens.
-    gtbleft.style.setProperty("flex-wrap", "wrap", "important");
+
+  const { container: betterGameTopBarToggle } = createSettingsInput({
+    key: "ui-improvements:betterGameTopBar",
+    label: "Better Header",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
+  const betterGameTopBar = Storage.get(
+    "ui-improvements:betterGameTopBar",
+    true
+  );
+  if (betterGameTopBar) {
+    GM_addStyle(`
+      .game-topbar {
+        position: relative !important;
+      }
+      body {
+        padding-block: 0px !important;
+        padding-inline: 0px !important;
+        padding-top: 0px !important;
+      }
+      @media (max-width: 600px) {
+        body {
+            padding-top: 0px !important;
+        }
+      }
+    `);
+    const gtbleft = document.querySelector(".gtb-left");
+    if (gtbleft) {
+      // wrap the top bar, even on small screens.
+      gtbleft.style.setProperty("flex-wrap", "wrap", "important");
+    }
   }
   // ---------------------------- Top Bar ------------------------------- //
 
@@ -157,6 +172,7 @@
 
   addSettingsGroup("global", "Global Settings", "Global settings", [
     useCustomNavigationToggle,
+    betterGameTopBarToggle,
   ]);
 
   const useCustomNavigation = Storage.get(
