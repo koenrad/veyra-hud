@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.0.2
+// @version      2.0.3
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -138,6 +138,9 @@
   );
   if (betterGameTopBar) {
     GM_addStyle(`
+      body {
+        margin-bottom: 35px;
+      }
       .game-topbar {
         position: relative !important;
       }
@@ -158,6 +161,7 @@
       gtbleft.style.setProperty("flex-wrap", "wrap", "important");
     }
   }
+
   // ---------------------------- Top Bar ------------------------------- //
 
   // -------------------- Menu Sidebar / Navigation -------------------- //

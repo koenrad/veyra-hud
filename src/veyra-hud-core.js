@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Veyra Hud Core
 // @namespace    http://tampermonkey.net/
-// @version      1.0.2
+// @version      1.0.3
 // @description  Core functionality for veyra-hud
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
@@ -166,57 +166,64 @@ GM_addStyle(`.switch-label {
   }`);
 
 GM_addStyle(`
-  
-.settings-drawer-trigger {
-  position: fixed;
-  right: 175px;
-  bottom: 17px;
-  z-index: 10001;
-  background: #24263a;
-  border: 1px solid #2f324d;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, .6);
-  border-radius: 12px;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  cursor: pointer;
-  font-weight: 700;
-  font-size: 14px;
-  line-height: 1.2;
-  padding: 10px 12px;
-  gap: 6px;
-}
+    .settings-drawer-trigger {
+        position: fixed;
+        right: 175px;
+        bottom: 17px;
+        z-index: 10001;
+        background: #24263a;
+        border: 1px solid #2f324d;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, .6);
+        border-radius: 12px;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 14px;
+        line-height: 1.2;
+        padding: 10px 12px;
+        gap: 6px;
+    }
 
-#settingsDrawer {
-  position: fixed;
-  top: 0;
-  right: -280px;
-  width: 260px;
-  max-width: 80vw;
-  height: 100vh;
-  background: #1a1b25;
-  border-left: 1px solid #2f324d;
-  box-shadow: 0 0 30px rgba(0, 0, 0, .8);
-  z-index: 10002;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  transition: right .25s ease;
-  color: #fff;
-  font-family: Arial, sans-serif;
-}
-body.settingsdrawer-open #battleDrawerBackdrop {
-  display: block;
-}
+    #settingsDrawer {
+        position: fixed;
+        top: 0;
+        right: -280px;
+        width: 260px;
+        max-width: 80vw;
+        height: 100vh;
+        background: #1a1b25;
+        border-left: 1px solid #2f324d;
+        box-shadow: 0 0 30px rgba(0, 0, 0, .8);
+        z-index: 10002;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        transition: right .25s ease;
+        color: #fff;
+        font-family: Arial, sans-serif;
+    }
 
-body.settingsdrawer-open #settingsDrawer {
-  right: 0;
-}
+    #settingsDrawerContainer {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 35px;
+    }
 
-`);
+    body.settingsdrawer-open #battleDrawerBackdrop {
+        display: block;
+    }
+
+    body.settingsdrawer-open #settingsDrawer {
+        right: 0;
+    }
+
+    `);
 function initSettingsDrawer() {
   const bodyEl = document.body;
 
@@ -250,7 +257,7 @@ function initSettingsDrawer() {
     const listEl = drawer.querySelector(".qs-list");
     if (listEl) {
       listEl.innerHTML = `
-        <div id="settingsDrawerContainer" style="display:flex;flex-direction:column;gap:8px;"></div>
+        <div id="settingsDrawerContainer"></div>
       `;
     }
 
