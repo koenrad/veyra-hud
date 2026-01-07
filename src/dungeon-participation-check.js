@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         Dungeon Participation Check
 // @namespace    http://tampermonkey.net/
-// @version      1.0.1
+// @version      1.0.2
 // @description  Dungeon participation report
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/dungeon-participation-check.js
 // @downloadURL  https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/dungeon-participation-check.js
+// @require      https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
 // @match        https://demonicscans.org/guild_dungeon_instance.php*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=demonicscans.org
 // @grant        GM_addStyle
@@ -16,7 +17,6 @@
   // ===============================
   // CONFIG
   // ===============================
-  const CHECK_DAMAGE_LIMITS = true;
 
   const MONSTER_CONFIG = Object.freeze({
     // Winter Event
@@ -138,57 +138,7 @@
   // UTILITIES
   // ===============================
 
-  function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  const Storage = {
-    get(key, fallback = null) {
-      try {
-        const value = localStorage.getItem(key);
-        return value !== null ? JSON.parse(value) : fallback;
-      } catch {
-        return fallback;
-      }
-    },
-
-    set(key, value) {
-      try {
-        localStorage.setItem(key, JSON.stringify(value));
-      } catch {}
-    },
-
-    remove(key) {
-      try {
-        localStorage.removeItem(key);
-      } catch {}
-    },
-
-    has(key) {
-      return localStorage.getItem(key) !== null;
-    },
-  };
-
   const REPORTS = Storage.get("dungeon-participation-check:reports", {});
-
-  function getUserId() {
-    const img = document.querySelector('.small-ava img[src*="user_"]');
-    if (!img) return null;
-
-    const match = img.src.match(/user_(\d+)_/);
-    return match ? Number(match[1]) : null;
-  }
-
-  function showNotification(msg, type = "success") {
-    const note = document.getElementById("notification");
-    if (!note) return;
-    note.innerHTML = msg;
-    note.style.background = type === "error" ? "#e74c3c" : "#2ecc71";
-    note.style.display = "block";
-    setTimeout(() => {
-      note.style.display = "none";
-    }, 3000);
-  }
 
   async function injectGenerateReportButton(id) {
     // Create the new button element
@@ -240,7 +190,7 @@
         const monsterId = params.get("dgmid");
 
         const mobPage = await internalFetch(mobUrl);
-        const monsterName = getMonsterName(mobPage);
+        const monsterName = getMonsterNameFromBattlePage(mobPage);
         const lb = mobPage.querySelectorAll(".lb-list .lb-row");
 
         return {
@@ -335,21 +285,6 @@
     return [...players.values()].sort((a, b) => b.totalDamage - a.totalDamage);
   }
 
-  function getMonsterName(doc = document) {
-    const cardTitle = doc.querySelector(".monster-card .card-title");
-    if (!cardTitle) return null;
-
-    // Find the first text node (safer than childNodes[0])
-    const textNode = [...cardTitle.childNodes].find(
-      (node) => node.nodeType === Node.TEXT_NODE
-    );
-    if (!textNode) return null;
-
-    return textNode.textContent
-      .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "")
-      .trim();
-  }
-
   function extractLeaderboard(lb) {
     const data = Array.from(lb).map((row) => {
       const link = row.querySelector(".lb-name a");
@@ -366,16 +301,6 @@
       };
     });
     return data;
-  }
-
-  async function internalFetch(url) {
-    const response = await fetch(url);
-    const html = await response.text();
-
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, "text/html");
-
-    return doc;
   }
 
   (async function main() {

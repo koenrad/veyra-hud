@@ -1,9 +1,12 @@
 // ==UserScript==
 // @name         Filter Inventory
 // @namespace    http://tampermonkey.net/
-// @version      1.0.3
+// @version      1.0.4
 // @description  Filters the inventory semi-permanently, centers the sets on mobile
 // @author       [SEREPH] koenrad
+// @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/filter-inventory.js
+// @downloadURL  https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/filter-inventory.js
+// @require      https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
 // @match        https://demonicscans.org/inventory.php*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=demonicscans.org
 // @grant        GM_addStyle
@@ -12,48 +15,29 @@
 (function () {
   "use strict";
 
-  GM_addStyle(`.switch-label {
-              position: relative;
-              display: inline-flex;
-              align-items: center;
-              font-size: 14px;
-              user-select: none;
-            }
-            .switch-label input[type="checkbox"] {
-              display: none;
-            }
-            .switch-label .slider {
-              position: relative;
-              width: 36px;
-              height: 20px;
-              background-color: #ccc;
-              border-radius: 20px;
-              transition: background-color 0.3s;
-            }
-            .switch-label .slider::before {
-              content: "";
-              position: absolute;
-              width: 16px;
-              height: 16px;
-              left: 2px;
-              top: 2px;
-              background: white;
-              border-radius: 50%;
-              transition: transform 0.3s;
-            }
-            .switch-label input[type="checkbox"]:checked + .slider {
-              background-color: #4caf50;
-            }
-            .switch-label input[type="checkbox"]:checked + .slider::before {
-              transform: translateX(16px);
-            }
-            .set-tabs {
-                flex-wrap: wrap;
-                justify-content: center !important;
-                overflow-x: visible !important;
-            }`);
+  let filterInventory = Storage.get("filterInventory", true);
+  let enableInventoryFilter = Storage.get(
+    "inventory-filter:enableInventoryFilter",
+    true
+  );
+  if (addSettingsGroup && createSettingsInput) {
+    const { container: enableInventoryFilteringToggle } = createSettingsInput({
+      key: "inventory-filter:enableInventoryFilter",
+      label: "Enable Inventory Filter",
+      defaultValue: true,
+      type: "checkbox",
+      inputProps: { slider: true },
+    });
 
-  let filterInventory = localStorage.getItem("filterInventory") === "true"; // persist toggle state
+    addSettingsGroup(
+      "inventory",
+      "Inventory Settings",
+      "Settings related to the inventory",
+      [enableInventoryFilteringToggle]
+    );
+  } else {
+    alert("There was an error loading veyra-hud-core.js");
+  }
 
   function addInventoryToggle() {
     const container = document.querySelector(".set-tabs");
@@ -87,7 +71,7 @@
         filterInventory = e.target.checked;
         const settings = document.getElementById("filter-settings-wrapper");
         settings.style.display = filterInventory ? "block" : "none";
-        localStorage.setItem("filterInventory", filterInventory);
+        Storage.set("filterInventory", filterInventory);
         console.log(
           "Filter-Inventory:",
           filterInventory ? "enabled" : "disabled"
@@ -106,28 +90,28 @@
     wrapper.style.display = filterInventory ? "block" : "none";
 
     wrapper.innerHTML = `
-    <button id="filter-settings-btn" class="tab" style="height:100%">⚙ Filters</button>
+          <button id="filter-settings-btn" class="tab" style="height:100%">⚙ Filters</button>
 
-    <div id="filter-settings-panel"
-         style="
-           display:none;
-           position:absolute;
-           right:0;
-           top:36px;
-           background:#222;
-           padding:10px;
-           border:1px solid #444;
-           border-radius:5px;
-           min-height:300px;
-           max-height: 600px;
-           overflow-y:auto;
-           width:300px;
-           z-index:99999999;
-         ">
-      <strong>Show these items:</strong><br><br>
-      <div id="filter-checkboxes"></div>
-    </div>
-  `;
+          <div id="filter-settings-panel"
+              style="
+                display:none;
+                position:absolute;
+                right:0;
+                top:36px;
+                background:#222;
+                padding:10px;
+                border:1px solid #444;
+                border-radius:5px;
+                min-height:300px;
+                max-height: 600px;
+                overflow-y:auto;
+                width:300px;
+                z-index:99999999;
+              ">
+            <strong>Show these items:</strong><br><br>
+            <div id="filter-checkboxes"></div>
+          </div>
+        `;
 
     // document.body.appendChild(container);
     hostContainer.appendChild(wrapper);
@@ -152,7 +136,7 @@
 
     // Fill checkboxes
     const boxContainer = document.getElementById("filter-checkboxes");
-    let saved = JSON.parse(localStorage.getItem("inventoryFilters") || "{}");
+    let saved = Storage.get("inventoryFilters", {});
 
     itemNames.forEach((name) => {
       const checked = saved[name] !== false;
@@ -176,7 +160,7 @@
           store[x.dataset.name] = x.checked;
         });
 
-        localStorage.setItem("inventoryFilters", JSON.stringify(store));
+        Storage.set("inventoryFilters", store);
         filterInventoryItems();
       });
     });
@@ -194,7 +178,7 @@
   }
 
   function filterInventoryItems() {
-    const saved = JSON.parse(localStorage.getItem("inventoryFilters") || "{}");
+    const saved = Storage.get("inventoryFilters", {});
 
     document.querySelectorAll(".slot-box").forEach((slot) => {
       const infoBtn = slot.querySelector(".info-btn");
@@ -207,11 +191,12 @@
     });
   }
 
-  addInventoryToggle();
-  const items = extractItemNames();
-  addInventoryFilterUI(items);
-  if (filterInventory) {
-    console.log("In PvP Arena");
-    filterInventoryItems();
+  if (enableInventoryFilter) {
+    addInventoryToggle();
+    const items = extractItemNames();
+    addInventoryFilterUI(items);
+    if (filterInventory) {
+      filterInventoryItems();
+    }
   }
 })();

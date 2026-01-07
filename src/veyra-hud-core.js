@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         Veyra Hud Core
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0
+// @version      1.0.1
 // @description  Core functionality for veyra-hud
 // @author       [SEREPH] koenrad
-// @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/main/veyra-hud-core.js
-// @downloadURL  https://raw.githubusercontent.com/koenrad/veyra-hud/main/veyra-hud-core.js
+// @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
+// @downloadURL  https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
 // @match        https://demonicscans.org/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=demonicscans.org
 // @grant        GM_addStyle
@@ -95,6 +95,48 @@ function getMonsterNameFromBattlePage(doc = document) {
 }
 
 // ------------------------ Settings Drawer --------------------------- //
+
+GM_addStyle(`.switch-label {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    font-size: 14px;
+    user-select: none;
+  }
+  .switch-label input[type="checkbox"] {
+    display: none;
+  }
+  .switch-label .slider {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    background-color: #ccc;
+    border-radius: 20px;
+    transition: background-color 0.3s;
+  }
+  .switch-label .slider::before {
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 2px;
+    top: 2px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.3s;
+  }
+  .switch-label input[type="checkbox"]:checked + .slider {
+    background-color: #4caf50;
+  }
+  .switch-label input[type="checkbox"]:checked + .slider::before {
+    transform: translateX(16px);
+  }
+  .set-tabs {
+      flex-wrap: wrap;
+      justify-content: center !important;
+      overflow-x: visible !important;
+  }`);
+
 GM_addStyle(`
   
 .settings-drawer-trigger {
@@ -167,7 +209,7 @@ function initSettingsDrawer() {
     // Update header
     const titleEl = drawer.querySelector(".title");
     const subtitleEl = drawer.querySelector(".subtitle");
-    if (titleEl) titleEl.textContent = "Dungeon Settings";
+    if (titleEl) titleEl.textContent = "Veyra-Hud Settings";
     if (subtitleEl)
       subtitleEl.textContent =
         "Global settings for various plugins and userscripts developed by koenrad for the SEREPH guild";
