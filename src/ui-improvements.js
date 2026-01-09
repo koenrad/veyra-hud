@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.0.3
+// @version      2.0.4
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -1954,4 +1954,455 @@
   }
 
   // ----------------------- Guild Member's List ----------------------- //
+
+  // ------------------------- Dungeon Loot All ------------------------ //
+
+  const { container: useDungeonLootToggle, input: useDungeonLootInput } =
+    createSettingsInput({
+      key: "ui-improvements:useDungeonLoot",
+      label: "Enable Bulk Loot",
+      defaultValue: true,
+      type: "checkbox",
+      inputProps: { slider: true },
+    });
+
+  const { container: stopLootingOnLevelUpToggle } = createSettingsInput({
+    key: "ui-improvements:stopLootingOnLevelUp",
+    label: "Stop Looting On Level",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
+  let showLootOnLevel = useDungeonLootInput.checked;
+  stopLootingOnLevelUpToggle.style.display = showHpBar ? "flex" : "none";
+
+  useDungeonLootInput.addEventListener("change", () => {
+    console.log("changed!");
+    showLootOnLevel = useDungeonLootInput.checked;
+    stopLootingOnLevelUpToggle.style.display = showLootOnLevel
+      ? "flex"
+      : "none";
+  });
+
+  addSettingsGroup(
+    "dungeon",
+    "Dungeon Loot",
+    "settings for bulk dungeon looting",
+    [useDungeonLootToggle, stopLootingOnLevelUpToggle]
+  );
+
+  const useDungeonLoot = Storage.get("ui-improvements:useDungeonLoot", true);
+  const stopLootingOnLevelUp = Storage.get(
+    "ui-improvements:stopLootingOnLevelUp",
+    true
+  );
+
+  function getUnootedMobs(doc = document) {
+    return [...doc.querySelectorAll(".mon.dead")].filter((mon) =>
+      [...mon.querySelectorAll(".pill")].some(
+        (pill) => pill.textContent.trim() === "not looted"
+      )
+    );
+  }
+
+  async function lootAllMonsters(instanceId, stopIfLevelUp = true) {
+    let locations = ["1", "2", "3", "4"];
+    let mobsToLoot = [];
+    const expToLevel = getRequiredExperienceToLevel();
+    for (const location of locations) {
+      const locationPage = await internalFetch(
+        `/guild_dungeon_location.php?instance_id=${instanceId}&location_id=${location}`
+      );
+      const unlootedMobs = getUnootedMobs(locationPage);
+      mobsToLoot.push(...unlootedMobs);
+    }
+
+    console.log(`Looting ${mobsToLoot.length} monsters...`);
+    const allLootData = {
+      leveledUp: false,
+      numMobsToLoot: mobsToLoot.length,
+      processed: 0,
+      success: 0,
+      fail: 0,
+      items: [],
+      rewards: { exp: 0, gold: 0, damage_dealt: 0 },
+    };
+    for (const mon of mobsToLoot) {
+      // Getting monster id from the href of the view button (eww)
+      const viewBtn = mon.querySelector('a[href*="battle.php"]');
+      if (!viewBtn) continue;
+      const params = new URLSearchParams(viewBtn.href.split("?")[1]);
+      const monsterId = params.get("dgmid");
+
+      try {
+        const lootData = await lootMonster(monsterId, instanceId);
+        allLootData.success += 1;
+        allLootData.items.push(...lootData.items);
+        allLootData.rewards.exp += lootData.rewards.exp;
+        allLootData.rewards.gold += lootData.rewards.gold;
+        allLootData.rewards.damage_dealt += lootData.rewards.damage_dealt;
+      } catch (e) {
+        console.error("Failed to loot monster:", monsterId, e);
+        allLootData.fail += 1;
+      }
+
+      allLootData.processed += 1;
+
+      // Check if leveled up
+      if (allLootData.rewards.exp >= expToLevel) {
+        allLootData.leveledUp = true;
+        if (stopIfLevelUp) {
+          break;
+        }
+      }
+    }
+
+    showNotification("All lootable monsters looted!");
+    showLootModal(allLootData);
+  }
+
+  function showLootModal(lootData) {
+    const lootModal = initLootModal();
+    const items = dedupeItems(lootData.items);
+    const rewards = lootData.rewards;
+    const noteContainer = lootModal.querySelector("#lootNote");
+    const itemsContainer = lootModal.querySelector("#lootItems");
+
+    const chip = document.createElement("div");
+    chip.className = "chip";
+
+    if (lootData.leveledUp) {
+      const levelUpChip = chip.cloneNode();
+      levelUpChip.textContent = `Leveled Up!`;
+      noteContainer.appendChild(levelUpChip);
+    }
+
+    const processedChip = chip.cloneNode();
+    processedChip.textContent = `Processed: ${lootData.processed.toLocaleString()}/${lootData.numMobsToLoot.toLocaleString()}`;
+    noteContainer.appendChild(processedChip);
+
+    const successChip = chip.cloneNode();
+    successChip.textContent = `Success: ${lootData.success.toLocaleString()}`;
+    noteContainer.appendChild(successChip);
+
+    const failedChip = chip.cloneNode();
+    failedChip.textContent = `Fail: ${lootData.fail.toLocaleString()}`;
+    noteContainer.appendChild(failedChip);
+
+    const expChip = chip.cloneNode();
+    expChip.textContent = `Exp: ${rewards.exp.toLocaleString()}`;
+    noteContainer.appendChild(expChip);
+
+    const goldChip = chip.cloneNode();
+    goldChip.textContent = `Gold: ${rewards.gold.toLocaleString()}`;
+    noteContainer.appendChild(goldChip);
+
+    const dmgChip = chip.cloneNode();
+    dmgChip.textContent = `Damage: ${rewards.damage_dealt.toLocaleString()}`;
+    noteContainer.appendChild(dmgChip);
+
+    const itemsChip = chip.cloneNode();
+    itemsChip.textContent = `Items: ${lootData.items.length.toLocaleString()}`;
+    noteContainer.appendChild(itemsChip);
+
+    if (items.length === 0) {
+      const noItems = document.createElement("div");
+      noItems.className = "muted";
+      noItems.style.padding = "6px 0";
+      noItems.textContent = "No items this time.";
+      itemsContainer.appendChild(noItems);
+    } else {
+      for (const item of items) {
+        const itemDiv = document.createElement("div");
+        itemDiv.className = "blm-item";
+
+        // Quantity badge (only if > 1)
+        if (item.QUANTITY_DROPPED) {
+          const qty = document.createElement("div");
+          qty.className = "blm-item-qty";
+          qty.textContent = `x${item.QUANTITY_DROPPED}`;
+          itemDiv.appendChild(qty);
+        }
+
+        const img = document.createElement("img");
+        img.src = item.IMAGE_URL;
+        img.alt = item.NAME;
+
+        const name = document.createElement("small");
+        name.textContent = item.NAME;
+
+        itemDiv.appendChild(img);
+        itemDiv.appendChild(name);
+
+        if (item.TIER) {
+          const tier = document.createElement("small");
+          tier.className = "muted";
+          tier.textContent = item.TIER;
+          itemDiv.appendChild(tier);
+        }
+
+        itemsContainer.appendChild(itemDiv);
+      }
+    }
+  }
+
+  function initLootModal() {
+    console.info("veyra-hud: loot modal init");
+    let lootModal;
+    const lootModals = document.getElementsByClassName(
+      "veyra-hud-custom-loot-modal"
+    );
+    const exists = lootModals?.length > 0;
+    if (exists) {
+      return lootModals[0];
+    } else {
+      console.info("veyra-hud: injecting loot modal");
+      // =======================
+      // Inject CSS
+      // =======================
+      GM_addStyle(`
+        #lootModal {
+          display: none;
+          position: fixed;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0, 0, 0, 0.8);
+          z-index: 9999;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .loot-content {
+          background: #2a2a3d;
+          border-radius: 12px;
+          padding: 20px;
+          max-width: 90%;
+          width: 500px;
+          text-align: center;
+          color: white;
+          overflow-y: auto;
+          max-height: 80%;
+          box-shadow: 0 16px 44px rgba(0, 0, 0, .6), 0 0 0 4px rgba(219, 186, 107, .06);
+        }
+
+        .loot-content h2 {
+          margin-bottom: 15px;
+        }
+
+        #lootNote {
+          margin: -6px 0 10px 0;
+          display: flex;
+          flex-wrap: wrap;
+          flex-direction: row;
+          justify-content: center;
+        }
+
+        #lootItems {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 10px;
+        }
+
+        .loot-content button {
+          margin-top: 10px;
+          cursor: pointer;
+          box-shadow: 0 6px 16px rgba(0, 0, 0, .35);
+          background: linear-gradient(180deg, #23252B, #1A1B20);
+        }
+        .chip {
+          background: #212439;
+          color: #cdd1ea;
+          border: 1px solid #2b2e49;
+          border-radius: 999px;
+          padding: 3px 10px;
+          font-size: 12px
+        }
+        .btn-ghost {
+          background: #333;
+          color: #fff;
+          border: none;
+          border-radius: 8px;
+          padding: 8px 12px;
+          cursor: pointer;
+        }
+        .blm-item{background:#1e1e2f;border:1px solid #2b2d44;border-radius:10px;width:92px;padding:8px;text-align:center;position: relative;}
+        .blm-item img{width:64px;height:64px;object-fit:cover;border-radius:8px;display:block;margin:0 auto 6px}
+        .blm-item small{display:block;line-height:1.2}
+
+        
+        .blm-item-qty {
+          position: absolute;
+          top: 4px;
+          right: 4px;
+          background: #111827;
+          color: #fff;
+          font-size: 11px;
+          font-weight: 600;
+          padding: 2px 6px;
+          border-radius: 999px;
+          border: 1px solid #2b2d44;
+          line-height: 1;
+          pointer-events: none;
+        }
+      `);
+
+      // =======================
+      // Create Modal Structure
+      // =======================
+      const lootModal = document.createElement("div");
+      lootModal.id = "lootModal";
+      lootModal.classList.add("veyra-hud-custom-loot-modal");
+
+      // Content container
+      const content = document.createElement("div");
+      content.className = "loot-content";
+
+      // Title
+      const title = document.createElement("h2");
+      title.textContent = "🎁 Loot Gained";
+
+      // Loot note
+      const lootNote = document.createElement("div");
+      lootNote.id = "lootNote";
+      lootNote.className = "muted";
+
+      // Loot items container
+      const lootItems = document.createElement("div");
+      lootItems.id = "lootItems";
+
+      // Spacer
+      const spacer = document.createElement("br");
+
+      // Close button
+      const closeButton = document.createElement("button");
+      closeButton.textContent = "Close";
+      closeButton.className = "btn-ghost";
+      closeButton.addEventListener("click", () => {
+        lootModal.style.display = "none";
+      });
+
+      // =======================
+      // Assemble DOM
+      // =======================
+      content.appendChild(title);
+      content.appendChild(lootNote);
+      content.appendChild(lootItems);
+      content.appendChild(spacer);
+      content.appendChild(closeButton);
+
+      lootModal.appendChild(content);
+      document.body.appendChild(lootModal);
+
+      // =======================
+      // Helper Functions
+      // =======================
+      window.showLootModal = () => {
+        lootModal.style.display = "flex";
+      };
+
+      window.hideLootModal = () => {
+        lootModal.style.display = "none";
+      };
+      return lootModal;
+    }
+  }
+
+  async function lootMonster(monsterId, instanceId) {
+    console.log("looting: ", monsterId);
+    const results = {
+      items: [],
+      rewards: { exp: 0, gold: 0, damage_dealt: 0 },
+    };
+
+    const userId = getUserId();
+    if (!userId || !monsterId || !instanceId) {
+      console.warn(
+        `lootMonster: missing params! userId: ${userId}, monsterId: ${monsterId}, instanceId: ${instanceId}`
+      );
+      return;
+    }
+    const params = new URLSearchParams();
+    params.set("user_id", String(userId));
+    params.set("dgmid", String(monsterId));
+    params.set("instance_id", String(instanceId));
+
+    const res = await fetch("dungeon_loot.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      referrer: `https://demonicscans.org/battle.php?dgmid=${monsterId}`,
+      body: params.toString(),
+    });
+
+    const ct = res.headers.get("content-type") || "";
+    const data = await res.json();
+
+    if (Array.isArray(data.items)) {
+      results.items.push(...data.items);
+    }
+
+    if (data.rewards) {
+      results.rewards = data.rewards;
+    }
+
+    return results;
+  }
+
+  function dedupeItems(items) {
+    const map = new Map();
+
+    for (const item of items) {
+      const id = item.ITEM_ID;
+
+      if (!map.has(id)) {
+        map.set(id, {
+          ...item,
+          QUANTITY_DROPPED: 1,
+        });
+      } else {
+        map.get(id).QUANTITY_DROPPED++;
+      }
+    }
+
+    return Array.from(map.values());
+  }
+
+  async function injectLootAllButton(instanceId) {
+    const lootBtn = document.createElement("div");
+    lootBtn.className = "btn";
+    lootBtn.textContent = "💰 Loot Monsters";
+
+    lootBtn.addEventListener("click", async () => {
+      lootBtn.textContent = "💰 Looting...";
+      lootBtn.setAttribute("disabled", true);
+
+      await lootAllMonsters(instanceId, stopLootingOnLevelUp);
+
+      lootBtn.textContent = "💰 Loot Monsters";
+      lootBtn.removeAttribute("disabled");
+    });
+
+    const row = document.querySelector(".row > .row");
+    row.insertBefore(lootBtn, row.children[2]);
+  }
+
+  (async function dungeonLooting() {
+    if (
+      window.location.href.includes("guild_dungeon_instance.php") &&
+      useDungeonLoot
+    ) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const id = urlParams.get("id");
+      if (id) {
+        injectLootAllButton(id);
+      }
+    }
+  })();
+
+  // ------------------------- Dungeon Loot All ------------------------ //
 })();

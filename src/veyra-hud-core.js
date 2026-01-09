@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Veyra Hud Core
 // @namespace    http://tampermonkey.net/
-// @version      1.0.3
+// @version      1.0.4
 // @description  Core functionality for veyra-hud
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
@@ -77,6 +77,31 @@ async function sendWebhookMessage(webhookUrl, message) {
   } catch (err) {
     console.error("Webhook send failed:", err);
   }
+}
+
+function getRequiredExperienceToLevel(doc = document) {
+  const expEl = doc.querySelector(".gtb-exp-top span:last-child");
+
+  let expToNext = null;
+
+  if (expEl) {
+    const text = expEl.textContent; // "26,728,765 / 79,254,606"
+    const match = text.match(/([\d,]+)\s*\/\s*([\d,]+)/);
+
+    if (match) {
+      const current = Number(match[1].replace(/,/g, ""));
+      const total = Number(match[2].replace(/,/g, ""));
+      expToNext = total - current;
+    }
+  }
+  return expToNext;
+}
+
+function getCurrentLevel(doc = document) {
+  const match = doc
+    .querySelector(".gtb-level")
+    ?.textContent.match(/LV\s*(\d+)/);
+  return match ? Number(match[1]) : null;
 }
 
 const Storage = {
