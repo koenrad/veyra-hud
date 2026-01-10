@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.0.4
+// @version      2.0.5
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -12,7 +12,7 @@
 // @grant        GM_addStyle
 // ==/UserScript==
 
-(function () {
+(async function () {
   ("use strict");
 
   GM_addStyle(`
@@ -55,13 +55,14 @@
 
   async function useHealthPotion() {
     try {
-      if (!USER_ID) {
+      const userId = await getUserId();
+      if (!userId) {
         showNotification("USER_ID not set!", "error");
         return;
       }
 
       const fd = new URLSearchParams();
-      fd.set("user_id", USER_ID);
+      fd.set("user_id", userId);
 
       const res = await fetch("user_heal_potion.php", {
         method: "POST",
@@ -87,7 +88,7 @@
       }
       if (String(data.status).trim() === "success") {
         showNotification(data.message || "Healed!", "success");
-        setTimeout(() => location.reload(), 500);
+        setTimeout(() => refreshPage(), 500);
       } else {
         showNotification(data.message || "Heal failed.", "error");
       }
@@ -1064,12 +1065,13 @@
 
     async function doJoin(monsterId) {
       if (!JOIN_URL) return { ok: false, msg: "Join endpoint not set" };
-      if (!USER_ID) return { ok: false, msg: "Missing USER_ID" };
+      const userId = await getUserId();
+      if (!userId) return { ok: false, msg: "Missing userId" };
 
       // ✅ user_join_battle.php expects POST monster_id + user_id
       const r = await postForm(JOIN_URL, {
         monster_id: monsterId,
-        user_id: USER_ID,
+        user_id: userId,
       });
 
       const n = normalizeOk(r);
@@ -1666,7 +1668,7 @@
       // Change handler
       checkbox.addEventListener("change", (e) => {
         Storage.set("ui-imrovements:useGroupedMobs", e.target.checked);
-        window.location.reload();
+        refreshPage();
       });
 
       if (useGroupedMobs) {
@@ -1684,7 +1686,7 @@
           e.target.dataset.prev = curr;
           if (prev === "" || curr === "") {
             setTimeout(() => {
-              window.location.reload();
+              refreshPage();
             }, 300);
           }
         });
@@ -2058,14 +2060,24 @@
       if (!viewBtn) continue;
       const params = new URLSearchParams(viewBtn.href.split("?")[1]);
       const monsterId = params.get("dgmid");
-
       try {
         const lootData = await lootMonster(monsterId, instanceId);
-        allLootData.success += 1;
-        allLootData.items.push(...lootData.items);
+        if (Array.isArray(lootData.items)) {
+          allLootData.items.push(...lootData.items);
+        }
+        const rewards = lootData.rewards;
+        if (
+          !rewards ||
+          !rewards.exp ||
+          !rewards.gold ||
+          !rewards.damage_dealt
+        ) {
+          throw new Error("no rewards object");
+        }
         allLootData.rewards.exp += lootData.rewards.exp;
         allLootData.rewards.gold += lootData.rewards.gold;
         allLootData.rewards.damage_dealt += lootData.rewards.damage_dealt;
+        allLootData.success += 1;
       } catch (e) {
         console.error("Failed to loot monster:", monsterId, e);
         allLootData.fail += 1;
@@ -2082,7 +2094,7 @@
       }
     }
 
-    showNotification("All lootable monsters looted!");
+    showNotification("All lootable monsters processed!");
     showLootModal(allLootData);
   }
 
@@ -2307,6 +2319,7 @@
       closeButton.className = "btn-ghost";
       closeButton.addEventListener("click", () => {
         lootModal.style.display = "none";
+        refreshPage();
       });
 
       // =======================
@@ -2335,6 +2348,23 @@
     }
   }
 
+  function getHealUserId() {
+    const btn = document.getElementById("healBtn");
+    if (!btn) return null;
+
+    const onclick = btn.getAttribute("onclick");
+    if (!onclick) return null;
+
+    // Extract second numeric argument from healDungeonPlayer(a, b, ...)
+    const match = onclick.match(/healDungeonPlayer\(\s*\d+\s*,\s*(\d+)\s*,/);
+    return match ? Number(match[1]) : null;
+  }
+
+  const userId =
+    (typeof VHC_USER_ID !== "undefined" && VHC_USER_ID) ||
+    (typeof USER_ID !== "undefined" && USER_ID) ||
+    getHealUserId();
+
   async function lootMonster(monsterId, instanceId) {
     console.log("looting: ", monsterId);
     const results = {
@@ -2342,7 +2372,7 @@
       rewards: { exp: 0, gold: 0, damage_dealt: 0 },
     };
 
-    const userId = getUserId();
+    // const userId = getHealUserId();
     if (!userId || !monsterId || !instanceId) {
       console.warn(
         `lootMonster: missing params! userId: ${userId}, monsterId: ${monsterId}, instanceId: ${instanceId}`
@@ -2365,6 +2395,10 @@
 
     const ct = res.headers.get("content-type") || "";
     const data = await res.json();
+
+    if (data.status !== "success") {
+      throw new Error("Loot Request Failed");
+    }
 
     if (Array.isArray(data.items)) {
       results.items.push(...data.items);
