@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Veyra Hud Core
 // @namespace    http://tampermonkey.net/
-// @version      2.0.0
+// @version      2.0.1
 // @description  Core functionality for veyra-hud
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
@@ -127,9 +127,6 @@ async function getUserId() {
     (await getUserIdByLoadingWavePage());
 
   if (!userId) {
-    alert(
-      "Could not retrieve your userId. Set a profile picture and try again."
-    );
   }
 
   return userId;
