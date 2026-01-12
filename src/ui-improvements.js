@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.1.0
+// @version      2.1.1
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -416,21 +416,12 @@ const LOOTING_BLACKLIST_SET = new Set(
     type: "checkbox",
     inputProps: { slider: true },
   });
-  const { container: showHpBarToggle, input: hpBarInput } = createSettingsInput(
-    {
-      key: "ui-improvements:showHpBar",
-      label: "Show HP Bar",
-      defaultValue: true,
-      type: "checkbox",
-      inputProps: { slider: true },
-    }
-  );
-
-  const { container: hpBarColorContainer } = createSettingsInput({
-    key: "ui-improvements:hpBarColor",
-    label: "HP Bar Color",
+  const { container: flashHpBarWhenLowContainer } = createSettingsInput({
+    key: "ui-improvements:flashHpBarWhenLow",
+    label: "Show HP Bar",
     defaultValue: true,
-    type: "color",
+    type: "checkbox",
+    inputProps: { slider: true },
   });
 
   const { container: ignoreBossMobsWhenLootingContainer } = createSettingsInput(
@@ -442,14 +433,6 @@ const LOOTING_BLACKLIST_SET = new Set(
       inputProps: { slider: true },
     }
   );
-
-  let showHpBar = hpBarInput.checked;
-  hpBarColorContainer.style.display = showHpBar ? "inline-block" : "none";
-
-  hpBarInput.addEventListener("change", () => {
-    showHpBar = hpBarInput.checked;
-    hpBarColorContainer.style.display = showHpBar ? "inline-block" : "none";
-  });
 
   let showUseParallelToggle = enableCustomAttackStrategyInput.checked;
   useParallelJoinsToggle.style.display = showUseParallelToggle
@@ -472,8 +455,7 @@ const LOOTING_BLACKLIST_SET = new Set(
       useParallelJoinsToggle,
       enableInBattleCountToggle,
       enableLootXFasterToggle,
-      showHpBarToggle,
-      hpBarColorContainer,
+      flashHpBarWhenLowContainer,
       ignoreBossMobsWhenLootingContainer,
     ]
   );
@@ -484,6 +466,25 @@ const LOOTING_BLACKLIST_SET = new Set(
     const hideDeadRaw = getCookie("hide_dead_monsters");
     const HIDE_DEAD_MONSTERS = hideDeadRaw === "1" || hideDeadRaw === "true";
     const PAGINATION_PAGE_SIZE = 200;
+
+    // -------------- flash hp bar ------------------ //
+    const flashWhenLow = Storage.get("ui-improvements:flashHpBarWhenLow", true);
+    if (flashWhenLow) {
+      const hpFill = document.querySelector(".res-fill.stamina");
+      if (hpFill) {
+        const hpPercent = parseFloat(hpFill.style.width);
+
+        if (hpPercent < 10) {
+          hpFill.parentElement.classList.add("flash-red-border", "needs-heal");
+        } else {
+          hpFill.parentElement.classList.remove(
+            "flash-red-border",
+            "needs-heal"
+          );
+        }
+      }
+    }
+    // -------------- flash hp bar ------------------ //
 
     // -------------- Loot X Faster ---------------- //
 
@@ -1044,43 +1045,6 @@ const LOOTING_BLACKLIST_SET = new Set(
 
 
       `);
-
-    // Pass in any monster id that is valid to grab the hp and mana bars.
-    async function fetchHpAndManaFragment(monster_id) {
-      const response = await fetch(`/battle.php?id=${monster_id}`);
-      const html = await response.text();
-
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, "text/html");
-      const playerCard = document.createElement("div");
-      playerCard.className = "battle-card player-card";
-      playerCard.id = "custom-hp-bar";
-
-      const livePlayerCard = doc.querySelector(".battle-card.player-card");
-
-      const hpBars = livePlayerCard.getElementsByClassName("hp-bar");
-      const hpBarColor = Storage.get("ui-improvements:hpBarColor", "#55ff55");
-
-      if (hpBars) {
-        // console.log("hpBars", hpBars);
-        for (const hpBar of hpBars) {
-          const hpBarContainer = hpBar.parentElement;
-          // console.log(hpBarContainer);
-          const hpEl = hpBarContainer.querySelector("#pHpFill");
-          if (hpEl) {
-            const hpPercent = parseFloat(hpEl.style.width);
-            hpEl.style.background = hpBarColor;
-            // console.log("hpPercent", hpPercent);
-            if (hpPercent < 10) {
-              playerCard.className = `flash-red-border needs-heal ${playerCard.className}`;
-            }
-          }
-          playerCard.appendChild(hpBarContainer);
-        }
-      }
-
-      return playerCard;
-    }
 
     const Skills = Object.freeze({
       slash: { id: "-0", cost: 1 },
@@ -1677,31 +1641,6 @@ const LOOTING_BLACKLIST_SET = new Set(
       renderStrategy();
     }
 
-    async function renderHpBar() {
-      const firstMonsterCard = document.querySelector(".monster-card");
-      const multiAttackCard = document.querySelector("#waveQolPanel");
-      if (
-        HIDE_DEAD_MONSTERS &&
-        firstMonsterCard &&
-        multiAttackCard &&
-        showHpBar
-      ) {
-        const existing = document.getElementById("custom-hp-bar");
-        if (existing) {
-          existing.remove();
-        }
-        const monsterId = firstMonsterCard.dataset.monsterId;
-        if (monsterId) {
-          const hpAndManaBars = await fetchHpAndManaFragment(monsterId);
-          if (hpAndManaBars) {
-            multiAttackCard.append(hpAndManaBars);
-          }
-        }
-      } else {
-        document.querySelector("#custom-hp-bar")?.remove();
-      }
-    }
-
     (function injectAttackSettings() {
       const enableCustomAttackStrategy = Storage.get(
         "ui-improvements:enableCustomAttackStrategy",
@@ -1883,8 +1822,6 @@ const LOOTING_BLACKLIST_SET = new Set(
           openBatchAttackModal(results);
         });
       }
-      // --------- Inject Hp Bar --------- //
-      renderHpBar();
     })();
 
     // ------------- Custom Attack Strategy ------------//
@@ -2249,7 +2186,7 @@ const LOOTING_BLACKLIST_SET = new Set(
   });
 
   let showLootOnLevel = useDungeonLootInput.checked;
-  stopLootingOnLevelUpToggle.style.display = showHpBar ? "flex" : "none";
+  stopLootingOnLevelUpToggle.style.display = showLootOnLevel ? "flex" : "none";
 
   useDungeonLootInput.addEventListener("change", () => {
     console.log("changed!");
