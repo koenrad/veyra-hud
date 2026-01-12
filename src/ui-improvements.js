@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.0.5
+// @version      2.1.0
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -12,6 +12,25 @@
 // @grant        GM_addStyle
 // ==/UserScript==
 
+const LOOTING_BLACKLIST = [
+  "drakzareth the cataclysmic half dragon king",
+  "general skarn the radiant bastion",
+  "general vessir the sunfang duelist",
+  "general hrazz the dawnflame oathkeeper",
+  "vessir, the solar inferna empress",
+  "drakzareth the tyrant lizard king",
+  "hrazz the dawnflame seraph",
+  "skarn, the molten general",
+  "oceanus the water titan",
+  "poseidon, the sea emperor",
+];
+
+// normalize blacklist once
+const LOOTING_BLACKLIST_SET = new Set(
+  LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
+);
+
+//TODO:: add this whitelist to mob pagination trick
 (async function () {
   ("use strict");
 
@@ -414,6 +433,16 @@
     type: "color",
   });
 
+  const { container: ignoreBossMobsWhenLootingContainer } = createSettingsInput(
+    {
+      key: "ui-improvements:ignoreBossMobsWhenLooting",
+      label: "Ignore Boss Mobs (loot x)",
+      defaultValue: true,
+      type: "checkbox",
+      inputProps: { slider: true },
+    }
+  );
+
   let showHpBar = hpBarInput.checked;
   hpBarColorContainer.style.display = showHpBar ? "inline-block" : "none";
 
@@ -445,6 +474,7 @@
       enableLootXFasterToggle,
       showHpBarToggle,
       hpBarColorContainer,
+      ignoreBossMobsWhenLootingContainer,
     ]
   );
 
@@ -453,8 +483,63 @@
     let inBattleCount = 0;
     const hideDeadRaw = getCookie("hide_dead_monsters");
     const HIDE_DEAD_MONSTERS = hideDeadRaw === "1" || hideDeadRaw === "true";
+    const PAGINATION_PAGE_SIZE = 200;
 
     // -------------- Loot X Faster ---------------- //
+
+    async function getLootableMobs(numMobs = 1) {
+      const ignoreBossMobsWhenLooting = Storage.get(
+        "ui-improvements:ignoreBossMobsWhenLooting",
+        true
+      );
+      const unclaimedKills = [...document.querySelectorAll(".unclaimed-pill")]
+        .find((el) => el.textContent.includes("Unclaimed kills"))
+        ?.querySelector(".count")?.textContent;
+
+      const unclaimedKillsNumber = Number(unclaimedKills);
+      const numPages = Math.ceil(unclaimedKillsNumber / PAGINATION_PAGE_SIZE);
+
+      const url = new URL(window.location.href);
+      const targetIds = new Set();
+      for (let i = 1; i <= numPages; i += 1) {
+        url.searchParams.set("dead_page", i.toString());
+        try {
+          const doc = await internalFetch(url.toString());
+          const els = Array.from(
+            doc.querySelectorAll('.monster-card[data-eligible="1"]')
+          );
+
+          els
+            .filter((el) => {
+              const name = el.dataset.name?.toLowerCase().trim();
+              if (ignoreBossMobsWhenLooting) {
+                if (LOOTING_BLACKLIST_SET.has(name)) {
+                  return false;
+                }
+              }
+              return true;
+            })
+            .map((el) => parseInt(el.dataset.monsterId, 10))
+            .filter(Boolean)
+            .forEach((id) => {
+              if (targetIds.size < numMobs) {
+                targetIds.add(id);
+              }
+            });
+          if (targetIds.size >= numMobs) {
+            break;
+          }
+        } catch (e) {
+          console.error(
+            `Error encountered while fetching dead mobs on page ${i}:`,
+            e
+          );
+        }
+      }
+
+      return [...targetIds];
+    }
+
     const enableLootXFaster = Storage.get(
       "ui-improvements:enableLootXFaster",
       true
@@ -477,10 +562,7 @@
             const eligibleEls = Array.from(
               document.querySelectorAll('.monster-card[data-eligible="1"]')
             );
-            const targetIds = eligibleEls
-              .slice(0, n)
-              .map((el) => parseInt(el.dataset.monsterId, 10))
-              .filter(Boolean);
+            let targetIds = await getLootableMobs(n);
 
             if (targetIds.length === 0) {
               $stat.textContent = "No eligible dead monsters you joined.";
@@ -488,10 +570,11 @@
             }
 
             setRunning(true);
-            let ok = 0,
-              fail = 0;
-            let totalExp = 0,
-              totalGold = 0;
+            let ok = 0;
+            let fail = 0;
+            let totalExp = 0;
+            let totalGold = 0;
+            let totalDmg = 0;
             const allItems = [];
             const allNotes = [];
             const promises = targetIds.map(async (targetId, i) => {
@@ -500,12 +583,13 @@
               }... (success: ${ok}, fail: ${fail})`;
 
               try {
-                const res = await lootOne(targetId);
+                const res = await lootMonster(targetId);
 
                 if (res.ok) {
                   ok++;
-                  totalExp += res.exp;
-                  totalGold += res.gold;
+                  totalExp += res.rewards.exp;
+                  totalGold += res.rewards.gold;
+                  totalDmg += res.rewards.damage_dealt;
 
                   if (res.items?.length) {
                     allItems.push(...res.items);
@@ -532,11 +616,12 @@
             setRunning(false);
             openBatchLootModal(
               {
-                processed: targetIds.length,
+                processed: `${ok + fail}/${targetIds.length}`,
                 success: ok,
                 fail,
                 exp: totalExp,
                 gold: totalGold,
+                dmg: totalDmg,
               },
               allItems,
               allNotes
@@ -546,6 +631,169 @@
       }
       overrideLootX();
     }
+
+    GM_addStyle(`
+      .blm-item{
+        position: relative;
+      }
+      .blm-item-qty {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        background: #111827;
+        color: #fff;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 6px;
+        border-radius: 999px;
+        border: 1px solid #2b2d44;
+        line-height: 1;
+        pointer-events: none;
+      }
+    `);
+    function openBatchLootModal(summary, items, notes) {
+      const sumEl = document.getElementById("blmSummary");
+      sumEl.innerHTML = `
+        <span class="chip">Processed: ${summary.processed}</span>
+        <span class="chip">Success: ${summary.success}</span>
+        <span class="chip">Fail: ${summary.fail}</span>
+        <span class="chip">EXP: ${new Intl.NumberFormat().format(
+          summary.exp
+        )}</span>
+        <span class="chip">Gold: ${new Intl.NumberFormat().format(
+          summary.gold
+        )}</span>
+        <span class="chip">Damage: ${new Intl.NumberFormat().format(
+          summary.dmg
+        )}</span>
+        <span class="chip">Items: ${items.length}</span>
+      `;
+
+      const noteEl = document.getElementById("blmNote");
+      const DROPLESS_PATTERNS = [
+        /^\s*no item dropped/i,
+        /^\s*you didn[’']?t reach the damage requirement/i,
+      ];
+      let filteredNotes = (notes || []).filter(Boolean);
+      if (items.length > 0) {
+        filteredNotes = filteredNotes.filter(
+          (n) => !DROPLESS_PATTERNS.some((p) => p.test(n))
+        );
+      }
+      const noteText = Array.from(new Set(filteredNotes)).join(" ");
+      if (noteText) {
+        noteEl.style.display = "block";
+        noteEl.textContent = noteText;
+      } else {
+        noteEl.style.display = "none";
+        noteEl.textContent = "";
+      }
+
+      const grid = document.getElementById("batchLootItems");
+
+      dedupedItems = dedupeItems(items);
+
+      grid.innerHTML = dedupedItems.length
+        ? dedupedItems
+            .map(
+              (it) => `
+            <div class="blm-item">
+              <div class="blm-item-qty">x${it.QUANTITY_DROPPED}</div>
+              <img src="${it.IMAGE_URL}" alt="${it.NAME}">
+              <small>${it.NAME}</small>
+              ${it.TIER ? `<small class="muted">${it.TIER}</small>` : ``}
+            </div>
+          `
+            )
+            .join("")
+        : `<div class="muted" style="padding:6px 0;">No items this time.</div>`;
+
+      document.getElementById("batchLootModal").style.display = "flex";
+    }
+
+    function patchLootButton() {
+      const $btn = document.querySelector("#btnLootX"); // replace with actual selector
+      if (!$btn) return;
+
+      // Find the existing click listeners
+      const oldHandler = $btn.onclick || $btn.__lootHandler;
+      // Remove it from the button (if needed)
+      $btn.replaceWith($btn.cloneNode(true));
+      const newBtn = document.querySelector("#btnLootX");
+
+      // Add your wrapped click handler
+      newBtn.addEventListener("click", async (e) => {
+        console.log("[TM] Loot click intercepted");
+        const n = Math.max(1, parseInt($input.value || "1", 10));
+        const eligibleEls = Array.from(
+          document.querySelectorAll('.monster-card[data-eligible="1"]')
+        );
+        const targetIds = eligibleEls
+          .slice(0, n)
+          .map((el) => parseInt(el.dataset.monsterId, 10))
+          .filter(Boolean);
+
+        if (targetIds.length === 0) {
+          $stat.textContent = "No eligible dead monsters you joined.";
+          return;
+        }
+
+        setRunning(true);
+        let ok = 0,
+          fail = 0;
+        let totalExp = 0,
+          totalGold = 0,
+          totalDmg = 0;
+        const allItems = [];
+        const allNotes = [];
+        for (let i = 0; i < targetIds.length; i++) {
+          $stat.textContent = `Looting ${i + 1}/${
+            targetIds.length
+          }... (success: ${ok}, fail: ${fail})`;
+          try {
+            const res = await lootMonster(targetIds[i]);
+            if (res.ok) {
+              ok++;
+              totalExp += res.rewards.exp;
+              totalGold += res.rewards.gold;
+              totalDmg += res.rewards.damage_dealt;
+              if (res.items?.length) {
+                allItems.push(...res.items);
+              } else if (res.note) {
+                allNotes.push(res.note);
+              }
+              const el = document.querySelector(
+                `.monster-card[data-monster-id="${targetIds[i]}"]`
+              );
+              if (el) el.setAttribute("data-eligible", "0");
+            } else {
+              fail++;
+              if (res.note) allNotes.push(res.note);
+            }
+          } catch (_e) {
+            fail++;
+            allNotes.push("Server error");
+          }
+          await new Promise((r) => setTimeout(r, 150));
+        }
+        $stat.textContent = `Done. Looted ${ok}, failed ${fail}.`;
+        setRunning(false);
+        openBatchLootModal(
+          {
+            processed: `${ok + fail}/${targetIds.length}`,
+            success: ok,
+            fail,
+            exp: totalExp,
+            gold: totalGold,
+            dmg: totalDmg,
+          },
+          allItems,
+          allNotes
+        );
+      });
+    }
+    patchLootButton();
+
     // -------------- Loot X Faster ---------------- //
 
     // --------- In Battle Count Injection ------------//
@@ -2365,9 +2613,10 @@
     (typeof USER_ID !== "undefined" && USER_ID) ||
     getHealUserId();
 
-  async function lootMonster(monsterId, instanceId) {
+  async function lootMonster(monsterId, instanceId = "0") {
     console.log("looting: ", monsterId);
     const results = {
+      ok: true,
       items: [],
       rewards: { exp: 0, gold: 0, damage_dealt: 0 },
     };
@@ -2381,10 +2630,13 @@
     }
     const params = new URLSearchParams();
     params.set("user_id", String(userId));
+    params.set("monster_id", String(monsterId));
     params.set("dgmid", String(monsterId));
     params.set("instance_id", String(instanceId));
 
-    const res = await fetch("dungeon_loot.php", {
+    const lootUrl = instanceId === "0" ? "loot.php" : "dungeon_loot.php";
+
+    const res = await fetch(lootUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
