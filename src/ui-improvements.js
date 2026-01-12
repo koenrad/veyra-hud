@@ -418,7 +418,7 @@ const LOOTING_BLACKLIST_SET = new Set(
   });
   const { container: flashHpBarWhenLowContainer } = createSettingsInput({
     key: "ui-improvements:flashHpBarWhenLow",
-    label: "Show HP Bar",
+    label: "Flash HP Bar",
     defaultValue: true,
     type: "checkbox",
     inputProps: { slider: true },
