@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Veyra Hud Core
 // @namespace    http://tampermonkey.net/
-// @version      2.0.2
+// @version      2.0.3
 // @description  Core functionality for veyra-hud
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
@@ -12,6 +12,24 @@
 // ==/UserScript==
 
 const VHC_USER_ID = await getUserId();
+
+function upgradeCheck() {
+  const scriptVersion = GM_info.script.version;
+  const scriptName = GM_info.script.name;
+  const previousVersion = Storage.get(
+    `${scriptName}:version`,
+    "unknown version"
+  );
+  if (previousVersion !== scriptVersion) {
+    Storage.set(`${scriptName}:version`, scriptVersion);
+    let direction = checkVersion(scriptVersion, previousVersion)
+      ? "upgraded"
+      : "downgraded";
+    pageAlert(
+      `${scriptName} ${direction} from v${previousVersion} => v${scriptVersion}`
+    );
+  }
+}
 
 const Storage = {
   get(key, fallback = null) {
@@ -186,6 +204,100 @@ function getUserIdByGemPurchaseExample() {
   return null;
 }
 
+function checkVersion(v1, v2) {
+  // Ensure versions are strings
+  v1 = String(v1);
+  v2 = String(v2);
+
+  // Split versions into parts
+  const parse = (v) => v.split(".").map((n) => parseInt(n, 10) || 0);
+
+  const [major1, minor1, patch1] = parse(v1);
+  const [major2, minor2, patch2] = parse(v2);
+
+  if (major1 > major2) return true;
+  if (major1 < major2) return false;
+
+  // majors equal, compare minor
+  if (minor1 > minor2) return true;
+  if (minor1 < minor2) return false;
+
+  // minors equal, compare patch
+  if (patch1 >= patch2) return true;
+
+  return false;
+}
+
+function pageAlert(message, options = {}) {
+  const { title = "Alert", buttonText = "OK" } = options;
+
+  // Create overlay
+  const overlay = document.createElement("div");
+  overlay.style.cssText = `
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999999;
+    font-family: sans-serif;
+  `;
+
+  // Create dialog box
+  const box = document.createElement("div");
+  box.style.cssText = `
+    background: #111;
+    color: #fff;
+    min-width: 280px;
+    max-width: 90%;
+    padding: 16px;
+    border-radius: 10px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.5);
+  `;
+
+  // Title
+  const titleEl = document.createElement("div");
+  titleEl.textContent = title;
+  titleEl.style.cssText = `font-weight: 600; margin-bottom: 8px;`;
+
+  // Message
+  const msgEl = document.createElement("div");
+  msgEl.textContent = message;
+  msgEl.style.cssText = `margin-bottom: 14px; white-space: pre-wrap;`;
+
+  // Button
+  const btn = document.createElement("button");
+  btn.textContent = buttonText;
+  btn.style.cssText = `
+    padding: 6px 14px;
+    background: #4f46e5;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    float: right;
+  `;
+
+  // Assemble
+  box.append(titleEl, msgEl, btn);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  // Close function
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+
+  // Close on click or Enter/Escape
+  btn.addEventListener("click", close);
+  const onKey = (e) => {
+    if (e.key === "Enter" || e.key === "Escape") close();
+  };
+  document.addEventListener("keydown", onKey);
+}
+
 function showNotification(msg, type = "success") {
   const note = document.getElementById("notification");
   if (!note) return;
@@ -264,7 +376,8 @@ function getMonsterNameFromBattlePage(doc = document) {
 
 // ------------------------ Settings Drawer --------------------------- //
 
-GM_addStyle(`.switch-label {
+GM_addStyle(`
+  .switch-label {
     position: relative;
     display: inline-flex;
     align-items: center;
@@ -309,6 +422,15 @@ GM_addStyle(`
     .qs-list {
       margin-bottom: 55px !important;
       padding-bottom: 75px !important;
+    }
+
+    .qs-list input[type="text"] {
+      width: 100px;
+      padding: 2px 4px;
+      border-radius: 4px;
+      border: 1px solid #2d3154;
+      background: #2d3154;
+      color: #e6e8ff;
     }
     .settings-drawer-trigger {
         position: fixed;
@@ -546,10 +668,12 @@ function addToSettingsGroup(groupId, elements) {
  */
 function createSettingsInput({
   key,
+  id = "",
   label,
   type = "checkbox",
   defaultValue = null,
   inputProps = {},
+  containerProps = {},
   options = [],
   onChange = null,
 }) {
@@ -568,6 +692,13 @@ function createSettingsInput({
   container.style.gap = "8px";
   container.style.cursor = "pointer";
   container.style.marginTop = "6px";
+
+  // Assign extra properties
+  const { style, ...rest } = containerProps;
+  Object.assign(container, rest);
+  if (style) {
+    Object.assign(container.style, style);
+  }
 
   // Label text
   const textEl = document.createElement("span");
@@ -603,7 +734,11 @@ function createSettingsInput({
   }
 
   // Assign extra properties
-  Object.assign(input, inputProps);
+  const { style: style2, ...rest2 } = inputProps;
+  Object.assign(input, rest2);
+  if (style2) {
+    Object.assign(input.style, style2);
+  }
 
   // Tag input for discovery
   input.dataset.settingKey = key;
@@ -624,7 +759,7 @@ function createSettingsInput({
     }
   });
 
-  input.id = key;
+  input.id = id || key;
 
   // Optional slider styling compatibility
   if (type === "checkbox") {
