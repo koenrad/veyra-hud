@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Veyra Hud Core
 // @namespace    http://tampermonkey.net/
-// @version      2.0.1
+// @version      2.0.2
 // @description  Core functionality for veyra-hud
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
@@ -306,6 +306,10 @@ GM_addStyle(`.switch-label {
   }`);
 
 GM_addStyle(`
+    .qs-list {
+      margin-bottom: 55px !important;
+      padding-bottom: 75px !important;
+    }
     .settings-drawer-trigger {
         position: fixed;
         right: 175px;
