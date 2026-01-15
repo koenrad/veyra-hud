@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.1.1
+// @version      2.2.0
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -33,6 +33,10 @@ const LOOTING_BLACKLIST_SET = new Set(
 //TODO:: add this whitelist to mob pagination trick
 (async function () {
   ("use strict");
+
+  if (typeof upgradeCheck === "function") {
+    upgradeCheck();
+  }
 
   GM_addStyle(`
     .custom-loot-btn {
@@ -445,6 +449,78 @@ const LOOTING_BLACKLIST_SET = new Set(
       ? "flex"
       : "none";
   });
+
+  const sortByHp = Storage.get("ui-improvements:sortByHp", false);
+  const filterByHp = Storage.get("ui-improvements:filterByHp", false);
+  const minHpValue = Storage.get("ui-improvements:minHpValue", 0);
+  const maxHpValue = Storage.get(
+    "ui-improvements:maxHpValue",
+    Number.MAX_SAFE_INTEGER
+  );
+
+  const { container: sortMobsByHpInSettingsToggle } = createSettingsInput({
+    key: "ui-improvements:sortByHp",
+    label: "Sort By Hp",
+    defaultValue: false,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
+  const { container: minHpValueToggle } = createSettingsInput({
+    key: "ui-improvements:minHpValue",
+    label: "Min Hp",
+    defaultValue: 0,
+    type: "text",
+    inputProps: {
+      min: 0,
+      max: maxHpValue,
+      placeholder: "min hp",
+      style: { width: "100px" },
+    },
+    containerProps: {
+      style: { display: filterByHp ? "flex" : "none" },
+    },
+  });
+
+  const { container: maxHpValueToggle } = createSettingsInput({
+    key: "ui-improvements:maxHpValue",
+    label: "Max Hp",
+    defaultValue: Number.MAX_SAFE_INTEGER,
+    type: "text",
+    inputProps: {
+      min: 1,
+      max: Number.MAX_SAFE_INTEGER,
+      placeholder: "max hp",
+      style: { width: "100px" },
+    },
+    containerProps: {
+      style: { display: filterByHp ? "flex" : "none" },
+    },
+  });
+
+  const { container: filterMobsByHpInSettingsToggle } = createSettingsInput({
+    key: "ui-improvements:filterByHp",
+    label: "Filter By Hp",
+    defaultValue: false,
+    type: "checkbox",
+    inputProps: { slider: true },
+    onChange: (value) => {
+      minHpValueToggle.style.display = value ? "flex" : "none";
+      maxHpValueToggle.style.display = value ? "flex" : "none";
+    },
+  });
+
+  addSettingsGroup(
+    "wave-filtering",
+    "Wave Filtering",
+    "settings related to wave filtering",
+    [
+      sortMobsByHpInSettingsToggle,
+      filterMobsByHpInSettingsToggle,
+      minHpValueToggle,
+      maxHpValueToggle,
+    ]
+  );
 
   addSettingsGroup(
     "wave-page",
@@ -1826,6 +1902,81 @@ const LOOTING_BLACKLIST_SET = new Set(
 
     // ------------- Custom Attack Strategy ------------//
 
+    // --------------- Filter Mobs by HP -------------- //
+    (function hpSettings() {
+      const { container: sortMobsByHpInSettingsToggle } = createSettingsInput({
+        key: "ui-improvements:sortByHp",
+        id: "sortByHp",
+        label: "Sort By Hp",
+        defaultValue: false,
+        type: "checkbox",
+        inputProps: { slider: true },
+        onChange: () => {
+          refreshPage();
+        },
+      });
+
+      const capCheckbox = document.getElementById("fCapNotReached");
+      if (!capCheckbox) return;
+
+      // Insert after CAP not reached label
+      const capLabel = capCheckbox.closest("label");
+      capLabel.insertAdjacentElement("afterend", sortMobsByHpInSettingsToggle);
+    })();
+
+    function filterAndSortByHp() {
+      if (!(sortByHp || filterByHp)) {
+        return;
+      }
+      const container = document.querySelector(".monster-container");
+      if (!container) return;
+
+      const cards = Array.from(container.querySelectorAll(".monster-card"));
+
+      // Extract HP data
+      const parsed = cards.map((card) => {
+        const hpText = card.querySelector(
+          ".stat-icon.hp + .stat-main .stat-value"
+        )?.textContent;
+
+        if (!hpText) {
+          return { card, currentHp: 0, maxHp: 0, percent: 0 };
+        }
+
+        const [current, max] = hpText
+          .split("/")
+          .map((v) => Number(v.replace(/,/g, "").trim()));
+
+        return {
+          card,
+          currentHp: current,
+          maxHp: max,
+          percent: max ? current / max : 0,
+        };
+      });
+
+      // FILTER
+      if (filterByHp) {
+        parsed.forEach((item) => {
+          const hp = item.currentHp;
+
+          if (hp < minHpValue || hp > maxHpValue) {
+            item.card.style.display = "none";
+          }
+        });
+      }
+
+      // SORT
+      if (sortByHp) {
+        parsed
+          .filter((item) => item.card.style.display !== "none")
+          .sort((a, b) => a.currentHp - b.currentHp) // lowest HP first
+          .forEach((item) => container.appendChild(item.card));
+      }
+    }
+
+    // --------------- Filter Mobs by HP -------------- //
+
     // --------- Group Mobs in their own row ----------- //
     const useGroupedMobs = Storage.get("ui-imrovements:useGroupedMobs", false);
 
@@ -1833,28 +1984,23 @@ const LOOTING_BLACKLIST_SET = new Set(
       const capCheckbox = document.getElementById("fCapNotReached");
       if (!capCheckbox) return;
 
-      // Create label + checkbox
-      const label = document.createElement("label");
+      filterAndSortByHp();
 
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.id = "fUseGroups";
-
-      // Initialize from storage
-      checkbox.checked = !!Storage.get("ui-imrovements:useGroupedMobs", false);
-
-      label.appendChild(checkbox);
-      label.appendChild(document.createTextNode(" Use Groups"));
+      const { container: useGroupedMobsToggle } = createSettingsInput({
+        key: "ui-imrovements:useGroupedMobs",
+        id: "sortByHp",
+        label: "Use Groups",
+        defaultValue: false,
+        type: "checkbox",
+        inputProps: { slider: true },
+        onChange: () => {
+          refreshPage();
+        },
+      });
 
       // Insert after CAP not reached label
       const capLabel = capCheckbox.closest("label");
-      capLabel.insertAdjacentElement("afterend", label);
-
-      // Change handler
-      checkbox.addEventListener("change", (e) => {
-        Storage.set("ui-imrovements:useGroupedMobs", e.target.checked);
-        refreshPage();
-      });
+      capLabel.insertAdjacentElement("afterend", useGroupedMobsToggle);
 
       if (useGroupedMobs) {
         const container = document.querySelector(".monster-container");
@@ -1895,9 +2041,13 @@ const LOOTING_BLACKLIST_SET = new Set(
           // Rebuild grouped + sorted rows
           groups.forEach((groupCards, name) => {
             // 🔑 Sort cards by data-monster-id (numeric)
-            groupCards.sort((a, b) => {
-              return Number(a.dataset.monsterId) - Number(b.dataset.monsterId);
-            });
+            if (!sortByHp) {
+              groupCards.sort((a, b) => {
+                return (
+                  Number(a.dataset.monsterId) - Number(b.dataset.monsterId)
+                );
+              });
+            }
 
             const row = document.createElement("div");
             row.className = "monster-row";
