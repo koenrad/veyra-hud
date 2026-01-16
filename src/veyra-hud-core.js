@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Veyra Hud Core
 // @namespace    http://tampermonkey.net/
-// @version      2.0.3
+// @version      2.0.4
 // @description  Core functionality for veyra-hud
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
@@ -20,14 +20,20 @@ function upgradeCheck() {
     `${scriptName}:version`,
     "unknown version"
   );
+  const enableNewVersionNotification = Storage.get(
+    "ui-improvements:enableNewVersionNotification",
+    true
+  );
   if (previousVersion !== scriptVersion) {
     Storage.set(`${scriptName}:version`, scriptVersion);
     let direction = checkVersion(scriptVersion, previousVersion)
       ? "upgraded"
       : "downgraded";
-    pageAlert(
-      `${scriptName} ${direction} from v${previousVersion} => v${scriptVersion}`
-    );
+    if (enableNewVersionNotification) {
+      pageAlert(
+        `${scriptName} ${direction} from v${previousVersion} => v${scriptVersion}`
+      );
+    }
   }
 }
 
@@ -59,6 +65,14 @@ const Storage = {
 };
 
 initSettingsDrawer();
+
+const { container: enableNewVersionNotificationToggle } = createSettingsInput({
+  key: "ui-improvements:enableNewVersionNotification",
+  label: "New Version Notification",
+  defaultValue: true,
+  type: "checkbox",
+  inputProps: { slider: true },
+});
 
 const { container: disableRefreshToggle } = createSettingsInput({
   key: "ui-improvements:disableRefresh",
@@ -96,6 +110,7 @@ persistLogsToggle.style.display = useDebugConsole ? "flex" : "none";
 // });
 
 addSettingsGroup("debug-console", "Developer Mode", "debug settings", [
+  enableNewVersionNotificationToggle,
   disableRefreshToggle,
   useDebugConsoleToggle,
   persistLogsToggle,
