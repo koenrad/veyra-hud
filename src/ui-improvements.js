@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.2.0
+// @version      2.2.1
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -238,18 +238,49 @@ const LOOTING_BLACKLIST_SET = new Set(
         "Wave 3",
         "🌊"
       );
+
+      addMenuLinkAfter(
+        "Home",
+        "/active_wave.php?gate=5&wave=9",
+        "Olympus",
+        "🏛️"
+      );
+
+      addMenuLinkAfter(
+        "Merchant",
+        "/black_merchant.php",
+        "Black Merchant",
+        "💀"
+      );
+
       addMenuLinkAfter(
         "Wave 3",
         "/adventurers_guild.php",
         "Adventurer's Guild",
         "🛡️"
       );
+
       addMenuLinkAfter(
         "Blacksmith",
         "/legendary_forge.php",
         "Legendary Forge",
         "🔥"
       );
+
+      addMenuLinkAfter(
+        "Legendary Forge",
+        "/legendary_decraft.php",
+        "Decraft Altar",
+        "🛕"
+      );
+
+      addMenuLinkAfter(
+        "Battle Pass",
+        "/weekly.php",
+        "Weekly Leaterboard",
+        "🏆"
+      );
+
       addMenuLinkAfter("Guild", "/guild_dungeon.php", "Guild Dungeons", "🕳️");
     }
   }
