@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.0.4
+// @version      2.2.5
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -12,8 +12,44 @@
 // @grant        GM_addStyle
 // ==/UserScript==
 
-(function () {
+const LOOTING_BLACKLIST = [
+  "drakzareth the cataclysmic half dragon king",
+  "general skarn the radiant bastion",
+  "general vessir the sunfang duelist",
+  "general hrazz the dawnflame oathkeeper",
+  "vessir, the solar inferna empress",
+  "drakzareth the tyrant lizard king",
+  "hrazz the dawnflame seraph",
+  "skarn, the molten general",
+  "oceanus the water titan",
+  "poseidon, the sea emperor",
+];
+
+// normalize blacklist once
+const LOOTING_BLACKLIST_SET = new Set(
+  LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
+);
+
+const PATCH_NOTES = `
+- Added Asterion stamina calculations to attack buttons on battle page (Global Settings => Better Attack Buttons).
+- Asterion multiplier support added to battle page (Global Settings => Use Asterion | Asterion Multiplier)
+- Asterion multiplier updates when on Pets Inventory
+- Styling of text inputs in settings drawer
+v2.2.4:
+- Added menu link to Lunar Plague event
+v2.2.3: 
+- vanilla loot-x button now ignores boss corpses (if set)
+v2.2.2:
+- fixed dungeon loot error when exp, gold or damage is zero
+- fixed padding at the bottom of the battle-consumables (iOS)`;
+
+//TODO:: add this whitelist to mob pagination trick
+(async function () {
   ("use strict");
+
+  if (typeof upgradeCheck === "function") {
+    upgradeCheck(PATCH_NOTES);
+  }
 
   GM_addStyle(`
     .custom-loot-btn {
@@ -55,13 +91,14 @@
 
   async function useHealthPotion() {
     try {
-      if (!USER_ID) {
+      const userId = await getUserId();
+      if (!userId) {
         showNotification("USER_ID not set!", "error");
         return;
       }
 
       const fd = new URLSearchParams();
-      fd.set("user_id", USER_ID);
+      fd.set("user_id", userId);
 
       const res = await fetch("user_heal_potion.php", {
         method: "POST",
@@ -87,7 +124,7 @@
       }
       if (String(data.status).trim() === "success") {
         showNotification(data.message || "Healed!", "success");
-        setTimeout(() => location.reload(), 500);
+        setTimeout(() => refreshPage(), 500);
       } else {
         showNotification(data.message || "Heal failed.", "error");
       }
@@ -166,6 +203,16 @@
 
   // -------------------- Menu Sidebar / Navigation -------------------- //
 
+  // Get asterion settings from storage
+  const useAsterion = Storage.get("ui-improvements:useAsterion", false);
+  const asterionValue = parseFloat(
+    Storage.get("ui-improvements:asterionValue", 1.5)
+  );
+  const useBetterAttackButtons = Storage.get(
+    "ui-improvements:useBetterAttackButtons",
+    true
+  );
+
   const { container: useCustomNavigationToggle } = createSettingsInput({
     key: "ui-improvements:useCustomNavigation",
     label: "Custom Navigation",
@@ -174,9 +221,45 @@
     inputProps: { slider: true },
   });
 
+  const { container: useBetterAttackButtonsToggle } = createSettingsInput({
+    key: "ui-improvements:useBetterAttackButtons",
+    label: "Better Attack Buttons",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
+  const { container: asterionValueContainer } = createSettingsInput({
+    key: "ui-improvements:asterionValue",
+    label: "Asterion Multiplier",
+    defaultValue: 1.5,
+    type: "number",
+    inputProps: {
+      step: 0.5,
+      style: { width: "100px" },
+    },
+    containerProps: {
+      style: { display: useAsterion ? "flex" : "none" },
+    },
+  });
+
+  const { container: useAsterionToggle } = createSettingsInput({
+    key: "ui-improvements:useAsterion",
+    label: "Use Asterion",
+    defaultValue: false,
+    type: "checkbox",
+    inputProps: { slider: true },
+    onChange: (value) => {
+      asterionValueContainer.style.display = value ? "flex" : "none";
+    },
+  });
+
   addSettingsGroup("global", "Global Settings", "Global settings", [
     useCustomNavigationToggle,
     betterGameTopBarToggle,
+    useBetterAttackButtonsToggle,
+    useAsterionToggle,
+    asterionValueContainer,
   ]);
 
   const useCustomNavigation = Storage.get(
@@ -214,22 +297,122 @@
         "Wave 3",
         "🌊"
       );
+
+      addMenuLinkAfter(
+        "Home",
+        "/active_wave.php?gate=5&wave=9",
+        "Olympus",
+        "🏛️"
+      );
+
+      addMenuLinkAfter(
+        "Merchant",
+        "/black_merchant.php",
+        "Black Merchant",
+        "💀"
+      );
+
       addMenuLinkAfter(
         "Wave 3",
         "/adventurers_guild.php",
         "Adventurer's Guild",
         "🛡️"
       );
+
       addMenuLinkAfter(
         "Blacksmith",
         "/legendary_forge.php",
         "Legendary Forge",
         "🔥"
       );
+
+      addMenuLinkAfter(
+        "Legendary Forge",
+        "/legendary_decraft.php",
+        "Decraft Altar",
+        "🛕"
+      );
+
+      addMenuLinkAfter(
+        "Battle Pass",
+        "/weekly.php",
+        "Weekly Leaderboard",
+        "🏆"
+      );
+
+      addMenuLinkAfter("Home", "/lunar_plague.php", "Lunar Plague Event", "☣️");
+
       addMenuLinkAfter("Guild", "/guild_dungeon.php", "Guild Dungeons", "🕳️");
     }
   }
   // -------------------- Menu Sidebar / Navigation -------------------- //
+
+  // -------------------------- Battle Page ---------------------------- //
+  // Change the slash buttons to show stamina usage with asterion multiplier
+  if (useBetterAttackButtons) {
+    document.querySelectorAll(".attack-btn").forEach((btn) => {
+      // CASE 1: buttons with MP / STAM layout
+      const costEl = btn.querySelector(".skill-cost");
+      if (costEl) {
+        const text = costEl.textContent.trim();
+
+        // Match "20 MP / 200 STAM"
+        const match = text.match(/(\d+)\s*MP\s*\/\s*(\d+)\s*STAM/i);
+        if (!match) return;
+
+        const mp = match[1];
+        const baseStam = Number(match[2]);
+        const finalStam = useAsterion ? baseStam * asterionValue : baseStam;
+
+        costEl.textContent = `${mp} MP / ${finalStam} STAM`;
+        return;
+      }
+
+      // CASE 2: simple text buttons
+      const text = btn.textContent.trim();
+
+      // Try to extract stamina cost from "(X STAMINA)"
+      const match = text.match(/\((\d+)\s*STAMINA\)/i);
+
+      const baseCost = match ? Number(match[1]) : 1; // Slash defaults to 1
+      const finalCost = useAsterion ? baseCost * asterionValue : baseCost;
+
+      // Remove any existing "(...)" part to get clean name
+      const name = text.replace(/\s*\(.*?\)\s*/, "");
+
+      // Update button text
+      btn.textContent = `${name} (${finalCost})`;
+    });
+  }
+  // -------------------------- Battle Page ---------------------------- //
+
+  // ---------------------------- Pets Page ---------------------------- //
+  if (document.location.href.includes("pets.php")) {
+    document.querySelectorAll(".slot-box").forEach((slot) => {
+      // Find pet name (from image alt or info button)
+      const name =
+        slot.querySelector("img")?.alt ||
+        slot.querySelector(".pet-info-overlay")?.dataset.name ||
+        "";
+
+      if (!/Asterion/i.test(name)) return;
+
+      // Look for multiplier text
+      const powerText =
+        slot.querySelector(".pet-power")?.textContent ||
+        slot.querySelector(".pet-info-overlay")?.dataset.desc ||
+        "";
+
+      // Match "x3", "x 3", etc.
+      const match = powerText.match(/x\s*(\d+)/i);
+      if (!match) return;
+
+      const foundAsterionValue = Number(match[1]);
+      if (asterionValue !== foundAsterionValue) {
+        Storage.set("ui-improvements:asterionValue", foundAsterionValue);
+      }
+    });
+  }
 
   // --------------------- Adventurer's Guild Page --------------------- //
   // Align the accept quest button on the Adventurer's Guild to the bottom of the element
@@ -396,30 +579,23 @@
     type: "checkbox",
     inputProps: { slider: true },
   });
-  const { container: showHpBarToggle, input: hpBarInput } = createSettingsInput(
+  const { container: flashHpBarWhenLowContainer } = createSettingsInput({
+    key: "ui-improvements:flashHpBarWhenLow",
+    label: "Flash HP Bar",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
+  const { container: ignoreBossMobsWhenLootingContainer } = createSettingsInput(
     {
-      key: "ui-improvements:showHpBar",
-      label: "Show HP Bar",
+      key: "ui-improvements:ignoreBossMobsWhenLooting",
+      label: "Ignore Boss Mobs (loot x)",
       defaultValue: true,
       type: "checkbox",
       inputProps: { slider: true },
     }
   );
-
-  const { container: hpBarColorContainer } = createSettingsInput({
-    key: "ui-improvements:hpBarColor",
-    label: "HP Bar Color",
-    defaultValue: true,
-    type: "color",
-  });
-
-  let showHpBar = hpBarInput.checked;
-  hpBarColorContainer.style.display = showHpBar ? "inline-block" : "none";
-
-  hpBarInput.addEventListener("change", () => {
-    showHpBar = hpBarInput.checked;
-    hpBarColorContainer.style.display = showHpBar ? "inline-block" : "none";
-  });
 
   let showUseParallelToggle = enableCustomAttackStrategyInput.checked;
   useParallelJoinsToggle.style.display = showUseParallelToggle
@@ -433,6 +609,78 @@
       : "none";
   });
 
+  const sortByHp = Storage.get("ui-improvements:sortByHp", false);
+  const filterByHp = Storage.get("ui-improvements:filterByHp", false);
+  const minHpValue = Storage.get("ui-improvements:minHpValue", 0);
+  const maxHpValue = Storage.get(
+    "ui-improvements:maxHpValue",
+    Number.MAX_SAFE_INTEGER
+  );
+
+  const { container: sortMobsByHpInSettingsToggle } = createSettingsInput({
+    key: "ui-improvements:sortByHp",
+    label: "Sort By Hp",
+    defaultValue: false,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
+  const { container: minHpValueToggle } = createSettingsInput({
+    key: "ui-improvements:minHpValue",
+    label: "Min Hp",
+    defaultValue: 0,
+    type: "text",
+    inputProps: {
+      min: 0,
+      max: maxHpValue,
+      placeholder: "min hp",
+      style: { width: "100px" },
+    },
+    containerProps: {
+      style: { display: filterByHp ? "flex" : "none" },
+    },
+  });
+
+  const { container: maxHpValueToggle } = createSettingsInput({
+    key: "ui-improvements:maxHpValue",
+    label: "Max Hp",
+    defaultValue: Number.MAX_SAFE_INTEGER,
+    type: "text",
+    inputProps: {
+      min: 1,
+      max: Number.MAX_SAFE_INTEGER,
+      placeholder: "max hp",
+      style: { width: "100px" },
+    },
+    containerProps: {
+      style: { display: filterByHp ? "flex" : "none" },
+    },
+  });
+
+  const { container: filterMobsByHpInSettingsToggle } = createSettingsInput({
+    key: "ui-improvements:filterByHp",
+    label: "Filter By Hp",
+    defaultValue: false,
+    type: "checkbox",
+    inputProps: { slider: true },
+    onChange: (value) => {
+      minHpValueToggle.style.display = value ? "flex" : "none";
+      maxHpValueToggle.style.display = value ? "flex" : "none";
+    },
+  });
+
+  addSettingsGroup(
+    "wave-filtering",
+    "Wave Filtering",
+    "settings related to wave filtering",
+    [
+      sortMobsByHpInSettingsToggle,
+      filterMobsByHpInSettingsToggle,
+      minHpValueToggle,
+      maxHpValueToggle,
+    ]
+  );
+
   addSettingsGroup(
     "wave-page",
     "Wave Page",
@@ -442,8 +690,8 @@
       useParallelJoinsToggle,
       enableInBattleCountToggle,
       enableLootXFasterToggle,
-      showHpBarToggle,
-      hpBarColorContainer,
+      flashHpBarWhenLowContainer,
+      ignoreBossMobsWhenLootingContainer,
     ]
   );
 
@@ -452,8 +700,82 @@
     let inBattleCount = 0;
     const hideDeadRaw = getCookie("hide_dead_monsters");
     const HIDE_DEAD_MONSTERS = hideDeadRaw === "1" || hideDeadRaw === "true";
+    const PAGINATION_PAGE_SIZE = 200;
+
+    // -------------- flash hp bar ------------------ //
+    const flashWhenLow = Storage.get("ui-improvements:flashHpBarWhenLow", true);
+    if (flashWhenLow) {
+      const hpFill = document.querySelector(".res-fill.stamina");
+      if (hpFill) {
+        const hpPercent = parseFloat(hpFill.style.width);
+
+        if (hpPercent < 10) {
+          hpFill.parentElement.classList.add("flash-red-border", "needs-heal");
+        } else {
+          hpFill.parentElement.classList.remove(
+            "flash-red-border",
+            "needs-heal"
+          );
+        }
+      }
+    }
+    // -------------- flash hp bar ------------------ //
 
     // -------------- Loot X Faster ---------------- //
+
+    async function getLootableMobs(numMobs = 1) {
+      const ignoreBossMobsWhenLooting = Storage.get(
+        "ui-improvements:ignoreBossMobsWhenLooting",
+        true
+      );
+      const unclaimedKills = [...document.querySelectorAll(".unclaimed-pill")]
+        .find((el) => el.textContent.includes("Unclaimed kills"))
+        ?.querySelector(".count")?.textContent;
+
+      const unclaimedKillsNumber = Number(unclaimedKills);
+      const numPages = Math.ceil(unclaimedKillsNumber / PAGINATION_PAGE_SIZE);
+
+      const url = new URL(window.location.href);
+      const targetIds = new Set();
+      for (let i = 1; i <= numPages; i += 1) {
+        url.searchParams.set("dead_page", i.toString());
+        try {
+          const doc = await internalFetch(url.toString());
+          const els = Array.from(
+            doc.querySelectorAll('.monster-card[data-eligible="1"]')
+          );
+
+          els
+            .filter((el) => {
+              const name = el.dataset.name?.toLowerCase().trim();
+              if (ignoreBossMobsWhenLooting) {
+                if (LOOTING_BLACKLIST_SET.has(name)) {
+                  return false;
+                }
+              }
+              return true;
+            })
+            .map((el) => parseInt(el.dataset.monsterId, 10))
+            .filter(Boolean)
+            .forEach((id) => {
+              if (targetIds.size < numMobs) {
+                targetIds.add(id);
+              }
+            });
+          if (targetIds.size >= numMobs) {
+            break;
+          }
+        } catch (e) {
+          console.error(
+            `Error encountered while fetching dead mobs on page ${i}:`,
+            e
+          );
+        }
+      }
+
+      return [...targetIds];
+    }
+
     const enableLootXFaster = Storage.get(
       "ui-improvements:enableLootXFaster",
       true
@@ -476,10 +798,7 @@
             const eligibleEls = Array.from(
               document.querySelectorAll('.monster-card[data-eligible="1"]')
             );
-            const targetIds = eligibleEls
-              .slice(0, n)
-              .map((el) => parseInt(el.dataset.monsterId, 10))
-              .filter(Boolean);
+            let targetIds = await getLootableMobs(n);
 
             if (targetIds.length === 0) {
               $stat.textContent = "No eligible dead monsters you joined.";
@@ -487,10 +806,11 @@
             }
 
             setRunning(true);
-            let ok = 0,
-              fail = 0;
-            let totalExp = 0,
-              totalGold = 0;
+            let ok = 0;
+            let fail = 0;
+            let totalExp = 0;
+            let totalGold = 0;
+            let totalDmg = 0;
             const allItems = [];
             const allNotes = [];
             const promises = targetIds.map(async (targetId, i) => {
@@ -499,12 +819,13 @@
               }... (success: ${ok}, fail: ${fail})`;
 
               try {
-                const res = await lootOne(targetId);
+                const res = await lootMonster(targetId);
 
                 if (res.ok) {
                   ok++;
-                  totalExp += res.exp;
-                  totalGold += res.gold;
+                  totalExp += res.rewards.exp;
+                  totalGold += res.rewards.gold;
+                  totalDmg += res.rewards.damage_dealt;
 
                   if (res.items?.length) {
                     allItems.push(...res.items);
@@ -531,11 +852,12 @@
             setRunning(false);
             openBatchLootModal(
               {
-                processed: targetIds.length,
+                processed: `${ok + fail}/${targetIds.length}`,
                 success: ok,
                 fail,
                 exp: totalExp,
                 gold: totalGold,
+                dmg: totalDmg,
               },
               allItems,
               allNotes
@@ -545,6 +867,183 @@
       }
       overrideLootX();
     }
+
+    GM_addStyle(`
+      .blm-item{
+        position: relative;
+      }
+      .blm-item-qty {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        background: #111827;
+        color: #fff;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 6px;
+        border-radius: 999px;
+        border: 1px solid #2b2d44;
+        line-height: 1;
+        pointer-events: none;
+      }
+    `);
+    function openBatchLootModal(summary, items, notes) {
+      const sumEl = document.getElementById("blmSummary");
+      sumEl.innerHTML = `
+        <span class="chip">Processed: ${summary.processed}</span>
+        <span class="chip">Success: ${summary.success}</span>
+        <span class="chip">Fail: ${summary.fail}</span>
+        <span class="chip">EXP: ${new Intl.NumberFormat().format(
+          summary.exp
+        )}</span>
+        <span class="chip">Gold: ${new Intl.NumberFormat().format(
+          summary.gold
+        )}</span>
+        <span class="chip">Damage: ${new Intl.NumberFormat().format(
+          summary.dmg
+        )}</span>
+        <span class="chip">Items: ${items.length}</span>
+      `;
+
+      const noteEl = document.getElementById("blmNote");
+      const DROPLESS_PATTERNS = [
+        /^\s*no item dropped/i,
+        /^\s*you didn[’']?t reach the damage requirement/i,
+      ];
+      let filteredNotes = (notes || []).filter(Boolean);
+      if (items.length > 0) {
+        filteredNotes = filteredNotes.filter(
+          (n) => !DROPLESS_PATTERNS.some((p) => p.test(n))
+        );
+      }
+      const noteText = Array.from(new Set(filteredNotes)).join(" ");
+      if (noteText) {
+        noteEl.style.display = "block";
+        noteEl.textContent = noteText;
+      } else {
+        noteEl.style.display = "none";
+        noteEl.textContent = "";
+      }
+
+      const grid = document.getElementById("batchLootItems");
+
+      dedupedItems = dedupeItems(items);
+
+      grid.innerHTML = dedupedItems.length
+        ? dedupedItems
+            .map(
+              (it) => `
+            <div class="blm-item">
+              <div class="blm-item-qty">x${it.QUANTITY_DROPPED}</div>
+              <img src="${it.IMAGE_URL}" alt="${it.NAME}">
+              <small>${it.NAME}</small>
+              ${it.TIER ? `<small class="muted">${it.TIER}</small>` : ``}
+            </div>
+          `
+            )
+            .join("")
+        : `<div class="muted" style="padding:6px 0;">No items this time.</div>`;
+
+      document.getElementById("batchLootModal").style.display = "flex";
+    }
+
+    function patchLootButton() {
+      const $btn = document.querySelector("#btnLootX"); // replace with actual selector
+      if (!$btn) return;
+
+      const ignoreBossMobsWhenLooting = Storage.get(
+        "ui-improvements:ignoreBossMobsWhenLooting",
+        true
+      );
+
+      // Find the existing click listeners
+      const oldHandler = $btn.onclick || $btn.__lootHandler;
+      // Remove it from the button (if needed)
+      $btn.replaceWith($btn.cloneNode(true));
+      const newBtn = document.querySelector("#btnLootX");
+
+      // Add your wrapped click handler
+      newBtn.addEventListener("click", async (e) => {
+        console.log("[TM] Loot click intercepted");
+        const n = Math.max(1, parseInt($input.value || "1", 10));
+        const eligibleEls = Array.from(
+          document.querySelectorAll('.monster-card[data-eligible="1"]')
+        ).filter((el) => {
+          const name = el.dataset.name?.toLowerCase().trim();
+          if (ignoreBossMobsWhenLooting) {
+            if (LOOTING_BLACKLIST_SET.has(name)) {
+              return false;
+            }
+          }
+          return true;
+        });
+
+        const targetIds = eligibleEls
+          .slice(0, n)
+          .map((el) => parseInt(el.dataset.monsterId, 10))
+          .filter(Boolean);
+
+        if (targetIds.length === 0) {
+          $stat.textContent = "No eligible dead monsters you joined.";
+          return;
+        }
+
+        setRunning(true);
+        let ok = 0,
+          fail = 0;
+        let totalExp = 0,
+          totalGold = 0,
+          totalDmg = 0;
+        const allItems = [];
+        const allNotes = [];
+        for (let i = 0; i < targetIds.length; i++) {
+          $stat.textContent = `Looting ${i + 1}/${
+            targetIds.length
+          }... (success: ${ok}, fail: ${fail})`;
+          try {
+            const res = await lootMonster(targetIds[i]);
+            if (res.ok) {
+              ok++;
+              totalExp += res.rewards.exp;
+              totalGold += res.rewards.gold;
+              totalDmg += res.rewards.damage_dealt;
+              if (res.items?.length) {
+                allItems.push(...res.items);
+              } else if (res.note) {
+                allNotes.push(res.note);
+              }
+              const el = document.querySelector(
+                `.monster-card[data-monster-id="${targetIds[i]}"]`
+              );
+              if (el) el.setAttribute("data-eligible", "0");
+            } else {
+              fail++;
+              if (res.note) allNotes.push(res.note);
+            }
+          } catch (_e) {
+            fail++;
+            allNotes.push("Server error");
+          }
+          // await new Promise((r) => setTimeout(r, 150));
+        }
+        $stat.textContent = `Done. Looted ${ok}, failed ${fail}.`;
+        setRunning(false);
+        openBatchLootModal(
+          {
+            processed: `${ok + fail}/${targetIds.length}`,
+            success: ok,
+            fail,
+            exp: totalExp,
+            gold: totalGold,
+            dmg: totalDmg,
+          },
+          allItems,
+          allNotes
+        );
+      });
+    }
+    patchLootButton();
+
     // -------------- Loot X Faster ---------------- //
 
     // --------- In Battle Count Injection ------------//
@@ -796,43 +1295,6 @@
 
       `);
 
-    // Pass in any monster id that is valid to grab the hp and mana bars.
-    async function fetchHpAndManaFragment(monster_id) {
-      const response = await fetch(`/battle.php?id=${monster_id}`);
-      const html = await response.text();
-
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, "text/html");
-      const playerCard = document.createElement("div");
-      playerCard.className = "battle-card player-card";
-      playerCard.id = "custom-hp-bar";
-
-      const livePlayerCard = doc.querySelector(".battle-card.player-card");
-
-      const hpBars = livePlayerCard.getElementsByClassName("hp-bar");
-      const hpBarColor = Storage.get("ui-improvements:hpBarColor", "#55ff55");
-
-      if (hpBars) {
-        // console.log("hpBars", hpBars);
-        for (const hpBar of hpBars) {
-          const hpBarContainer = hpBar.parentElement;
-          // console.log(hpBarContainer);
-          const hpEl = hpBarContainer.querySelector("#pHpFill");
-          if (hpEl) {
-            const hpPercent = parseFloat(hpEl.style.width);
-            hpEl.style.background = hpBarColor;
-            // console.log("hpPercent", hpPercent);
-            if (hpPercent < 10) {
-              playerCard.className = `flash-red-border needs-heal ${playerCard.className}`;
-            }
-          }
-          playerCard.appendChild(hpBarContainer);
-        }
-      }
-
-      return playerCard;
-    }
-
     const Skills = Object.freeze({
       slash: { id: "-0", cost: 1 },
       "power slash": { id: "-1", cost: 10 },
@@ -1064,12 +1526,13 @@
 
     async function doJoin(monsterId) {
       if (!JOIN_URL) return { ok: false, msg: "Join endpoint not set" };
-      if (!USER_ID) return { ok: false, msg: "Missing USER_ID" };
+      const userId = await getUserId();
+      if (!userId) return { ok: false, msg: "Missing userId" };
 
       // ✅ user_join_battle.php expects POST monster_id + user_id
       const r = await postForm(JOIN_URL, {
         monster_id: monsterId,
-        user_id: USER_ID,
+        user_id: userId,
       });
 
       const n = normalizeOk(r);
@@ -1427,31 +1890,6 @@
       renderStrategy();
     }
 
-    async function renderHpBar() {
-      const firstMonsterCard = document.querySelector(".monster-card");
-      const multiAttackCard = document.querySelector("#waveQolPanel");
-      if (
-        HIDE_DEAD_MONSTERS &&
-        firstMonsterCard &&
-        multiAttackCard &&
-        showHpBar
-      ) {
-        const existing = document.getElementById("custom-hp-bar");
-        if (existing) {
-          existing.remove();
-        }
-        const monsterId = firstMonsterCard.dataset.monsterId;
-        if (monsterId) {
-          const hpAndManaBars = await fetchHpAndManaFragment(monsterId);
-          if (hpAndManaBars) {
-            multiAttackCard.append(hpAndManaBars);
-          }
-        }
-      } else {
-        document.querySelector("#custom-hp-bar")?.remove();
-      }
-    }
-
     (function injectAttackSettings() {
       const enableCustomAttackStrategy = Storage.get(
         "ui-improvements:enableCustomAttackStrategy",
@@ -1633,11 +2071,84 @@
           openBatchAttackModal(results);
         });
       }
-      // --------- Inject Hp Bar --------- //
-      renderHpBar();
     })();
 
     // ------------- Custom Attack Strategy ------------//
+
+    // --------------- Filter Mobs by HP -------------- //
+    (function hpSettings() {
+      const { container: sortMobsByHpInSettingsToggle } = createSettingsInput({
+        key: "ui-improvements:sortByHp",
+        id: "sortByHp",
+        label: "Sort By Hp",
+        defaultValue: false,
+        type: "checkbox",
+        inputProps: { slider: true },
+        onChange: () => {
+          refreshPage();
+        },
+      });
+
+      const capCheckbox = document.getElementById("fCapNotReached");
+      if (!capCheckbox) return;
+
+      // Insert after CAP not reached label
+      const capLabel = capCheckbox.closest("label");
+      capLabel.insertAdjacentElement("afterend", sortMobsByHpInSettingsToggle);
+    })();
+
+    function filterAndSortByHp() {
+      if (!(sortByHp || filterByHp)) {
+        return;
+      }
+      const container = document.querySelector(".monster-container");
+      if (!container) return;
+
+      const cards = Array.from(container.querySelectorAll(".monster-card"));
+
+      // Extract HP data
+      const parsed = cards.map((card) => {
+        const hpText = card.querySelector(
+          ".stat-icon.hp + .stat-main .stat-value"
+        )?.textContent;
+
+        if (!hpText) {
+          return { card, currentHp: 0, maxHp: 0, percent: 0 };
+        }
+
+        const [current, max] = hpText
+          .split("/")
+          .map((v) => Number(v.replace(/,/g, "").trim()));
+
+        return {
+          card,
+          currentHp: current,
+          maxHp: max,
+          percent: max ? current / max : 0,
+        };
+      });
+
+      // FILTER
+      if (filterByHp) {
+        parsed.forEach((item) => {
+          const hp = item.currentHp;
+
+          if (hp < minHpValue || hp > maxHpValue) {
+            item.card.style.display = "none";
+          }
+        });
+      }
+
+      // SORT
+      if (sortByHp) {
+        parsed
+          .filter((item) => item.card.style.display !== "none")
+          .sort((a, b) => a.currentHp - b.currentHp) // lowest HP first
+          .forEach((item) => container.appendChild(item.card));
+      }
+    }
+
+    // --------------- Filter Mobs by HP -------------- //
 
     // --------- Group Mobs in their own row ----------- //
     const useGroupedMobs = Storage.get("ui-imrovements:useGroupedMobs", false);
@@ -1646,28 +2157,23 @@
       const capCheckbox = document.getElementById("fCapNotReached");
       if (!capCheckbox) return;
 
-      // Create label + checkbox
-      const label = document.createElement("label");
+      filterAndSortByHp();
 
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.id = "fUseGroups";
-
-      // Initialize from storage
-      checkbox.checked = !!Storage.get("ui-imrovements:useGroupedMobs", false);
-
-      label.appendChild(checkbox);
-      label.appendChild(document.createTextNode(" Use Groups"));
+      const { container: useGroupedMobsToggle } = createSettingsInput({
+        key: "ui-imrovements:useGroupedMobs",
+        id: "sortByHp",
+        label: "Use Groups",
+        defaultValue: false,
+        type: "checkbox",
+        inputProps: { slider: true },
+        onChange: () => {
+          refreshPage();
+        },
+      });
 
       // Insert after CAP not reached label
       const capLabel = capCheckbox.closest("label");
-      capLabel.insertAdjacentElement("afterend", label);
-
-      // Change handler
-      checkbox.addEventListener("change", (e) => {
-        Storage.set("ui-imrovements:useGroupedMobs", e.target.checked);
-        window.location.reload();
-      });
+      capLabel.insertAdjacentElement("afterend", useGroupedMobsToggle);
 
       if (useGroupedMobs) {
         const container = document.querySelector(".monster-container");
@@ -1684,7 +2190,7 @@
           e.target.dataset.prev = curr;
           if (prev === "" || curr === "") {
             setTimeout(() => {
-              window.location.reload();
+              refreshPage();
             }, 300);
           }
         });
@@ -1708,9 +2214,13 @@
           // Rebuild grouped + sorted rows
           groups.forEach((groupCards, name) => {
             // 🔑 Sort cards by data-monster-id (numeric)
-            groupCards.sort((a, b) => {
-              return Number(a.dataset.monsterId) - Number(b.dataset.monsterId);
-            });
+            if (!sortByHp) {
+              groupCards.sort((a, b) => {
+                return (
+                  Number(a.dataset.monsterId) - Number(b.dataset.monsterId)
+                );
+              });
+            }
 
             const row = document.createElement("div");
             row.className = "monster-row";
@@ -1858,19 +2368,22 @@
 
   // ------------------------- Battle Side Bar ------------------------- //
 
-  GM_addStyle(
-    `
+  GM_addStyle(`
+    #battleDrawer {
+      overflow: auto;
+      padding-bottom: 150px !important
+    }
+  `);
 
-    `
-  );
   (function sideBar() {
     const drawer = document.getElementById("battleDrawer");
     if (!drawer) return;
     // Make sidebar scrollable. (GM_addStyle didn't work for some reason)
     drawer.style.overflow = "auto";
+    drawer.style.setProperty("padding-bottom", "150px", "important");
     // add padding to last element so it's not below the chat button
     const lastElement = drawer.lastElementChild;
-    lastElement.style.marginBottom = "100px";
+    lastElement.style.setProperty("margin-bottom", "100px", "important");
   })();
   // ------------------------- Battle Side Bar ------------------------- //
 
@@ -1978,4 +2491,491 @@
   }
 
   // ----------------------- Guild Member's List ----------------------- //
+
+  // ------------------------- Dungeon Loot All ------------------------ //
+
+  const { container: useDungeonLootToggle, input: useDungeonLootInput } =
+    createSettingsInput({
+      key: "ui-improvements:useDungeonLoot",
+      label: "Enable Bulk Loot",
+      defaultValue: true,
+      type: "checkbox",
+      inputProps: { slider: true },
+    });
+
+  const { container: stopLootingOnLevelUpToggle } = createSettingsInput({
+    key: "ui-improvements:stopLootingOnLevelUp",
+    label: "Stop Looting On Level",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
+  let showLootOnLevel = useDungeonLootInput.checked;
+  stopLootingOnLevelUpToggle.style.display = showLootOnLevel ? "flex" : "none";
+
+  useDungeonLootInput.addEventListener("change", () => {
+    console.log("changed!");
+    showLootOnLevel = useDungeonLootInput.checked;
+    stopLootingOnLevelUpToggle.style.display = showLootOnLevel
+      ? "flex"
+      : "none";
+  });
+
+  addSettingsGroup(
+    "dungeon",
+    "Dungeon Loot",
+    "settings for bulk dungeon looting",
+    [useDungeonLootToggle, stopLootingOnLevelUpToggle]
+  );
+
+  const useDungeonLoot = Storage.get("ui-improvements:useDungeonLoot", true);
+  const stopLootingOnLevelUp = Storage.get(
+    "ui-improvements:stopLootingOnLevelUp",
+    true
+  );
+
+  function getUnootedMobs(doc = document) {
+    return [...doc.querySelectorAll(".mon.dead")].filter((mon) =>
+      [...mon.querySelectorAll(".pill")].some(
+        (pill) => pill.textContent.trim() === "not looted"
+      )
+    );
+  }
+
+  async function lootAllMonsters(instanceId, stopIfLevelUp = true) {
+    let locations = ["1", "2", "3", "4"];
+    let mobsToLoot = [];
+    const expToLevel = getRequiredExperienceToLevel();
+    for (const location of locations) {
+      const locationPage = await internalFetch(
+        `/guild_dungeon_location.php?instance_id=${instanceId}&location_id=${location}`
+      );
+      const unlootedMobs = getUnootedMobs(locationPage);
+      mobsToLoot.push(...unlootedMobs);
+    }
+
+    console.log(`Looting ${mobsToLoot.length} monsters...`);
+    const allLootData = {
+      leveledUp: false,
+      numMobsToLoot: mobsToLoot.length,
+      processed: 0,
+      success: 0,
+      fail: 0,
+      items: [],
+      rewards: { exp: 0, gold: 0, damage_dealt: 0 },
+    };
+    for (const mon of mobsToLoot) {
+      // Getting monster id from the href of the view button (eww)
+      const viewBtn = mon.querySelector('a[href*="battle.php"]');
+      if (!viewBtn) continue;
+      const params = new URLSearchParams(viewBtn.href.split("?")[1]);
+      const monsterId = params.get("dgmid");
+      try {
+        const lootData = await lootMonster(monsterId, instanceId);
+        if (Array.isArray(lootData.items)) {
+          allLootData.items.push(...lootData.items);
+        }
+        const rewards = lootData.rewards;
+        if (
+          !rewards ||
+          !("exp" in rewards) ||
+          !("gold" in rewards) ||
+          !("damage_dealt" in rewards)
+        ) {
+          throw new Error("no rewards object");
+        }
+        allLootData.rewards.exp += lootData.rewards.exp;
+        allLootData.rewards.gold += lootData.rewards.gold;
+        allLootData.rewards.damage_dealt += lootData.rewards.damage_dealt;
+        allLootData.success += 1;
+      } catch (e) {
+        console.error("Failed to loot monster:", monsterId, e);
+        allLootData.fail += 1;
+      }
+
+      allLootData.processed += 1;
+
+      // Check if leveled up
+      if (allLootData.rewards.exp >= expToLevel) {
+        allLootData.leveledUp = true;
+        if (stopIfLevelUp) {
+          break;
+        }
+      }
+    }
+
+    showNotification("All lootable monsters processed!");
+    showLootModal(allLootData);
+  }
+
+  function showLootModal(lootData) {
+    const lootModal = initLootModal();
+    const items = dedupeItems(lootData.items);
+    const rewards = lootData.rewards;
+    const noteContainer = lootModal.querySelector("#lootNote");
+    const itemsContainer = lootModal.querySelector("#lootItems");
+
+    const chip = document.createElement("div");
+    chip.className = "chip";
+
+    if (lootData.leveledUp) {
+      const levelUpChip = chip.cloneNode();
+      levelUpChip.textContent = `Leveled Up!`;
+      noteContainer.appendChild(levelUpChip);
+    }
+
+    const processedChip = chip.cloneNode();
+    processedChip.textContent = `Processed: ${lootData.processed.toLocaleString()}/${lootData.numMobsToLoot.toLocaleString()}`;
+    noteContainer.appendChild(processedChip);
+
+    const successChip = chip.cloneNode();
+    successChip.textContent = `Success: ${lootData.success.toLocaleString()}`;
+    noteContainer.appendChild(successChip);
+
+    const failedChip = chip.cloneNode();
+    failedChip.textContent = `Fail: ${lootData.fail.toLocaleString()}`;
+    noteContainer.appendChild(failedChip);
+
+    const expChip = chip.cloneNode();
+    expChip.textContent = `Exp: ${rewards.exp.toLocaleString()}`;
+    noteContainer.appendChild(expChip);
+
+    const goldChip = chip.cloneNode();
+    goldChip.textContent = `Gold: ${rewards.gold.toLocaleString()}`;
+    noteContainer.appendChild(goldChip);
+
+    const dmgChip = chip.cloneNode();
+    dmgChip.textContent = `Damage: ${rewards.damage_dealt.toLocaleString()}`;
+    noteContainer.appendChild(dmgChip);
+
+    const itemsChip = chip.cloneNode();
+    itemsChip.textContent = `Items: ${lootData.items.length.toLocaleString()}`;
+    noteContainer.appendChild(itemsChip);
+
+    if (items.length === 0) {
+      const noItems = document.createElement("div");
+      noItems.className = "muted";
+      noItems.style.padding = "6px 0";
+      noItems.textContent = "No items this time.";
+      itemsContainer.appendChild(noItems);
+    } else {
+      for (const item of items) {
+        const itemDiv = document.createElement("div");
+        itemDiv.className = "blm-item";
+
+        // Quantity badge (only if > 1)
+        if (item.QUANTITY_DROPPED) {
+          const qty = document.createElement("div");
+          qty.className = "blm-item-qty";
+          qty.textContent = `x${item.QUANTITY_DROPPED}`;
+          itemDiv.appendChild(qty);
+        }
+
+        const img = document.createElement("img");
+        img.src = item.IMAGE_URL;
+        img.alt = item.NAME;
+
+        const name = document.createElement("small");
+        name.textContent = item.NAME;
+
+        itemDiv.appendChild(img);
+        itemDiv.appendChild(name);
+
+        if (item.TIER) {
+          const tier = document.createElement("small");
+          tier.className = "muted";
+          tier.textContent = item.TIER;
+          itemDiv.appendChild(tier);
+        }
+
+        itemsContainer.appendChild(itemDiv);
+      }
+    }
+  }
+
+  function initLootModal() {
+    console.info("veyra-hud: loot modal init");
+    let lootModal;
+    const lootModals = document.getElementsByClassName(
+      "veyra-hud-custom-loot-modal"
+    );
+    const exists = lootModals?.length > 0;
+    if (exists) {
+      return lootModals[0];
+    } else {
+      console.info("veyra-hud: injecting loot modal");
+      // =======================
+      // Inject CSS
+      // =======================
+      GM_addStyle(`
+        #lootModal {
+          display: none;
+          position: fixed;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0, 0, 0, 0.8);
+          z-index: 9999;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .loot-content {
+          background: #2a2a3d;
+          border-radius: 12px;
+          padding: 20px;
+          max-width: 90%;
+          width: 500px;
+          text-align: center;
+          color: white;
+          overflow-y: auto;
+          max-height: 80%;
+          box-shadow: 0 16px 44px rgba(0, 0, 0, .6), 0 0 0 4px rgba(219, 186, 107, .06);
+        }
+
+        .loot-content h2 {
+          margin-bottom: 15px;
+        }
+
+        #lootNote {
+          margin: -6px 0 10px 0;
+          display: flex;
+          flex-wrap: wrap;
+          flex-direction: row;
+          justify-content: center;
+        }
+
+        #lootItems {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 10px;
+        }
+
+        .loot-content button {
+          margin-top: 10px;
+          cursor: pointer;
+          box-shadow: 0 6px 16px rgba(0, 0, 0, .35);
+          background: linear-gradient(180deg, #23252B, #1A1B20);
+        }
+        .chip {
+          background: #212439;
+          color: #cdd1ea;
+          border: 1px solid #2b2e49;
+          border-radius: 999px;
+          padding: 3px 10px;
+          font-size: 12px
+        }
+        .btn-ghost {
+          background: #333;
+          color: #fff;
+          border: none;
+          border-radius: 8px;
+          padding: 8px 12px;
+          cursor: pointer;
+        }
+        .blm-item{background:#1e1e2f;border:1px solid #2b2d44;border-radius:10px;width:92px;padding:8px;text-align:center;position: relative;}
+        .blm-item img{width:64px;height:64px;object-fit:cover;border-radius:8px;display:block;margin:0 auto 6px}
+        .blm-item small{display:block;line-height:1.2}
+
+        
+        .blm-item-qty {
+          position: absolute;
+          top: 4px;
+          right: 4px;
+          background: #111827;
+          color: #fff;
+          font-size: 11px;
+          font-weight: 600;
+          padding: 2px 6px;
+          border-radius: 999px;
+          border: 1px solid #2b2d44;
+          line-height: 1;
+          pointer-events: none;
+        }
+      `);
+
+      // =======================
+      // Create Modal Structure
+      // =======================
+      const lootModal = document.createElement("div");
+      lootModal.id = "lootModal";
+      lootModal.classList.add("veyra-hud-custom-loot-modal");
+
+      // Content container
+      const content = document.createElement("div");
+      content.className = "loot-content";
+
+      // Title
+      const title = document.createElement("h2");
+      title.textContent = "🎁 Loot Gained";
+
+      // Loot note
+      const lootNote = document.createElement("div");
+      lootNote.id = "lootNote";
+      lootNote.className = "muted";
+
+      // Loot items container
+      const lootItems = document.createElement("div");
+      lootItems.id = "lootItems";
+
+      // Spacer
+      const spacer = document.createElement("br");
+
+      // Close button
+      const closeButton = document.createElement("button");
+      closeButton.textContent = "Close";
+      closeButton.className = "btn-ghost";
+      closeButton.addEventListener("click", () => {
+        lootModal.style.display = "none";
+        refreshPage();
+      });
+
+      // =======================
+      // Assemble DOM
+      // =======================
+      content.appendChild(title);
+      content.appendChild(lootNote);
+      content.appendChild(lootItems);
+      content.appendChild(spacer);
+      content.appendChild(closeButton);
+
+      lootModal.appendChild(content);
+      document.body.appendChild(lootModal);
+
+      // =======================
+      // Helper Functions
+      // =======================
+      window.showLootModal = () => {
+        lootModal.style.display = "flex";
+      };
+
+      window.hideLootModal = () => {
+        lootModal.style.display = "none";
+      };
+      return lootModal;
+    }
+  }
+
+  function getHealUserId() {
+    const btn = document.getElementById("healBtn");
+    if (!btn) return null;
+
+    const onclick = btn.getAttribute("onclick");
+    if (!onclick) return null;
+
+    // Extract second numeric argument from healDungeonPlayer(a, b, ...)
+    const match = onclick.match(/healDungeonPlayer\(\s*\d+\s*,\s*(\d+)\s*,/);
+    return match ? Number(match[1]) : null;
+  }
+
+  const userId =
+    (typeof VHC_USER_ID !== "undefined" && VHC_USER_ID) ||
+    (typeof USER_ID !== "undefined" && USER_ID) ||
+    getHealUserId();
+
+  async function lootMonster(monsterId, instanceId = "0") {
+    console.log("looting: ", monsterId);
+    const results = {
+      ok: true,
+      items: [],
+      rewards: { exp: 0, gold: 0, damage_dealt: 0 },
+    };
+
+    // const userId = getHealUserId();
+    if (!userId || !monsterId || !instanceId) {
+      console.warn(
+        `lootMonster: missing params! userId: ${userId}, monsterId: ${monsterId}, instanceId: ${instanceId}`
+      );
+      return;
+    }
+    const params = new URLSearchParams();
+    params.set("user_id", String(userId));
+    params.set("monster_id", String(monsterId));
+    params.set("dgmid", String(monsterId));
+    params.set("instance_id", String(instanceId));
+
+    const lootUrl = instanceId === "0" ? "loot.php" : "dungeon_loot.php";
+
+    const res = await fetch(lootUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      referrer: `https://demonicscans.org/battle.php?dgmid=${monsterId}`,
+      body: params.toString(),
+    });
+
+    const ct = res.headers.get("content-type") || "";
+    const data = await res.json();
+
+    if (data.status !== "success") {
+      throw new Error("Loot Request Failed");
+    }
+
+    if (Array.isArray(data.items)) {
+      results.items.push(...data.items);
+    }
+
+    if (data.rewards) {
+      results.rewards = data.rewards;
+    }
+
+    return results;
+  }
+
+  function dedupeItems(items) {
+    const map = new Map();
+
+    for (const item of items) {
+      const id = item.ITEM_ID;
+
+      if (!map.has(id)) {
+        map.set(id, {
+          ...item,
+          QUANTITY_DROPPED: 1,
+        });
+      } else {
+        map.get(id).QUANTITY_DROPPED++;
+      }
+    }
+
+    return Array.from(map.values());
+  }
+
+  async function injectLootAllButton(instanceId) {
+    const lootBtn = document.createElement("div");
+    lootBtn.className = "btn";
+    lootBtn.textContent = "💰 Loot Monsters";
+
+    lootBtn.addEventListener("click", async () => {
+      lootBtn.textContent = "💰 Looting...";
+      lootBtn.setAttribute("disabled", true);
+
+      await lootAllMonsters(instanceId, stopLootingOnLevelUp);
+
+      lootBtn.textContent = "💰 Loot Monsters";
+      lootBtn.removeAttribute("disabled");
+    });
+
+    const row = document.querySelector(".row > .row");
+    row.insertBefore(lootBtn, row.children[2]);
+  }
+
+  (async function dungeonLooting() {
+    if (
+      window.location.href.includes("guild_dungeon_instance.php") &&
+      useDungeonLoot
+    ) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const id = urlParams.get("id");
+      if (id) {
+        injectLootAllButton(id);
+      }
+    }
+  })();
+
+  // ------------------------- Dungeon Loot All ------------------------ //
 })();

@@ -64,6 +64,9 @@ Because it runs in Tampermonkey, it works across browsers and is even available 
 - Guild Members List
   - Adds sorting to all columns
   - Defaults sort by Role (vanilla behaviour)
+- Guild Dungeon
+  - Adds bulk `Loot Monsters` button
+  - Stops looting on level up (configurable)
 
 ### filter-inventory.js
 

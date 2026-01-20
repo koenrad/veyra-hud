@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Veyra Hud Core
 // @namespace    http://tampermonkey.net/
-// @version      1.0.3
+// @version      2.0.7
 // @description  Core functionality for veyra-hud
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
@@ -11,8 +11,130 @@
 // @grant        GM_addStyle
 // ==/UserScript==
 
+const VHC_USER_ID = await getUserId();
+
+function upgradeCheck(patchNotes = "") {
+  const scriptVersion = GM_info.script.version;
+  const scriptName = GM_info.script.name;
+  const previousVersion = Storage.get(
+    `${scriptName}:version`,
+    "unknown version"
+  );
+  const enableNewVersionNotification = Storage.get(
+    "ui-improvements:enableNewVersionNotification",
+    true
+  );
+  if (previousVersion !== scriptVersion) {
+    // TODO:: remove this next version
+    Storage.set(`${scriptName}:version`, scriptVersion);
+    let direction = checkVersion(scriptVersion, previousVersion)
+      ? "upgraded"
+      : "downgraded";
+    if (enableNewVersionNotification) {
+      pageAlert(
+        `${scriptName} ${direction} from v${previousVersion} => v${scriptVersion}:\n${patchNotes}`,
+        {
+          title: "Version Changed",
+          onClick: () => {
+            Storage.set(`${scriptName}:version`, scriptVersion);
+          },
+        }
+      );
+    }
+  }
+}
+
+const Storage = {
+  get(key, fallback = null) {
+    try {
+      const value = localStorage.getItem(key);
+      return value !== null ? JSON.parse(value) : fallback;
+    } catch {
+      return fallback;
+    }
+  },
+
+  set(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {}
+  },
+
+  remove(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch {}
+  },
+
+  has(key) {
+    return localStorage.getItem(key) !== null;
+  },
+};
+
+initSettingsDrawer();
+
+const { container: enableNewVersionNotificationToggle } = createSettingsInput({
+  key: "ui-improvements:enableNewVersionNotification",
+  label: "New Version Notification",
+  defaultValue: true,
+  type: "checkbox",
+  inputProps: { slider: true },
+});
+
+const { container: disableRefreshToggle } = createSettingsInput({
+  key: "ui-improvements:disableRefresh",
+  label: "Disable Refreshes",
+  defaultValue: false,
+  type: "checkbox",
+  inputProps: { slider: true },
+});
+
+const { container: persistLogsToggle } = createSettingsInput({
+  key: "ui-improvements:persistLogs",
+  label: "Persist Logs",
+  defaultValue: true,
+  type: "checkbox",
+  inputProps: { slider: true },
+});
+
+const { container: useDebugConsoleToggle, input: useDebugConsoleInput } =
+  createSettingsInput({
+    key: "ui-improvements:debugConsole",
+    label: "Show Debug Console",
+    defaultValue: false,
+    type: "checkbox",
+    inputProps: { slider: true },
+    onChange: (value, input) => {
+      persistLogsToggle.style.display = value ? "flex" : "none";
+    },
+  });
+
+const useDebugConsole = useDebugConsoleInput.checked;
+persistLogsToggle.style.display = useDebugConsole ? "flex" : "none";
+
+// useDebugConsoleInput.addEventListener("click", () => {
+
+// });
+
+addSettingsGroup("debug-console", "Developer Mode", "debug settings", [
+  enableNewVersionNotificationToggle,
+  disableRefreshToggle,
+  useDebugConsoleToggle,
+  persistLogsToggle,
+]);
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function refreshPage(msg) {
+  const disableRefresh = Storage.get("ui-improvements:disableRefresh", false);
+  if (disableRefresh) {
+    console.warn(`Refresh intercepted. ${msg ? msg.toString() : ""} `);
+    return;
+  }
+  console.log("refreshing page");
+  window.location.reload();
 }
 
 function getRandomDelay(min, max) {
@@ -36,12 +158,167 @@ async function internalFetch(url) {
   return doc;
 }
 
-function getUserId() {
-  const img = document.querySelector('.small-ava img[src*="user_"]');
+async function getUserId() {
+  const userId =
+    (typeof USER_ID !== "undefined" && USER_ID) ||
+    getUserIdByPfP() ||
+    getUserIdByHealBtn() ||
+    getUserIdByGemPurchaseExample() ||
+    (await getUserIdByLoadingWavePage());
+
+  if (!userId) {
+  }
+
+  return userId;
+}
+
+function getUserIdByPfP(doc = document) {
+  const img = doc.querySelector('.small-ava img[src*="user_"]');
   if (!img) return null;
 
   const match = img.src.match(/user_(\d+)_/);
   return match ? Number(match[1]) : null;
+}
+
+function getUserIdByHealBtn(doc = document) {
+  const btn = doc.getElementById("healBtn");
+  if (!btn) return null;
+
+  const onclick = btn.getAttribute("onclick");
+  if (!onclick) return null;
+
+  // Extract second numeric argument from healDungeonPlayer(a, b, ...)
+  const match = onclick.match(/healDungeonPlayer\(\s*\d+\s*,\s*(\d+)\s*,/);
+  return match ? Number(match[1]) : null;
+}
+
+async function getUserIdByLoadingWavePage() {
+  const doc = await internalFetch("/active_wave.php?gate=3&wave=3");
+  const scripts = [...doc.querySelectorAll("script")];
+
+  let userId = null;
+
+  for (const script of scripts) {
+    const match = script.textContent.match(/const\s+USER_ID\s*=\s*(\d+);/);
+    if (match) {
+      userId = Number(match[1]);
+      break;
+    }
+  }
+
+  return userId;
+}
+
+function getUserIdByGemPurchaseExample() {
+  const block = document.querySelector(".ny-crypto-example-block");
+  if (!block) return null;
+
+  // Find all strong spans inside the example text
+  const strongs = block.querySelectorAll(".ny-crypto-example-text .ny-strong");
+
+  for (const el of strongs) {
+    const text = el.textContent.trim();
+    if (/^\d+$/.test(text)) {
+      return Number(text);
+    }
+  }
+
+  return null;
+}
+
+function checkVersion(v1, v2) {
+  // Ensure versions are strings
+  v1 = String(v1);
+  v2 = String(v2);
+
+  // Split versions into parts
+  const parse = (v) => v.split(".").map((n) => parseInt(n, 10) || 0);
+
+  const [major1, minor1, patch1] = parse(v1);
+  const [major2, minor2, patch2] = parse(v2);
+
+  if (major1 > major2) return true;
+  if (major1 < major2) return false;
+
+  // majors equal, compare minor
+  if (minor1 > minor2) return true;
+  if (minor1 < minor2) return false;
+
+  // minors equal, compare patch
+  if (patch1 >= patch2) return true;
+
+  return false;
+}
+
+function pageAlert(message, options = {}) {
+  const { title = "Alert", buttonText = "OK", onClick = () => {} } = options;
+
+  // Create overlay
+  const overlay = document.createElement("div");
+  overlay.style.cssText = `
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999999;
+    font-family: sans-serif;
+  `;
+
+  // Create dialog box
+  const box = document.createElement("div");
+  box.style.cssText = `
+    background: #111;
+    color: #fff;
+    min-width: 280px;
+    max-width: 90%;
+    padding: 16px;
+    border-radius: 10px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.5);
+  `;
+
+  // Title
+  const titleEl = document.createElement("div");
+  titleEl.textContent = title;
+  titleEl.style.cssText = `font-weight: 600; margin-bottom: 8px;`;
+
+  // Message
+  const msgEl = document.createElement("div");
+  msgEl.textContent = message;
+  msgEl.style.cssText = `margin-bottom: 14px; white-space: pre-wrap;`;
+
+  // Button
+  const btn = document.createElement("button");
+  btn.textContent = buttonText;
+  btn.style.cssText = `
+    padding: 6px 14px;
+    background: #4f46e5;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    float: right;
+  `;
+
+  // Assemble
+  box.append(titleEl, msgEl, btn);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  // Close function
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey);
+    onClick();
+  };
+
+  // Close on click or Enter/Escape
+  btn.addEventListener("click", close);
+  const onKey = (e) => {
+    if (e.key === "Enter" || e.key === "Escape") close();
+  };
+  document.addEventListener("keydown", onKey);
 }
 
 function showNotification(msg, type = "success") {
@@ -79,32 +356,30 @@ async function sendWebhookMessage(webhookUrl, message) {
   }
 }
 
-const Storage = {
-  get(key, fallback = null) {
-    try {
-      const value = localStorage.getItem(key);
-      return value !== null ? JSON.parse(value) : fallback;
-    } catch {
-      return fallback;
+function getRequiredExperienceToLevel(doc = document) {
+  const expEl = doc.querySelector(".gtb-exp-top span:last-child");
+
+  let expToNext = null;
+
+  if (expEl) {
+    const text = expEl.textContent; // "26,728,765 / 79,254,606"
+    const match = text.match(/([\d,]+)\s*\/\s*([\d,]+)/);
+
+    if (match) {
+      const current = Number(match[1].replace(/,/g, ""));
+      const total = Number(match[2].replace(/,/g, ""));
+      expToNext = total - current;
     }
-  },
+  }
+  return expToNext;
+}
 
-  set(key, value) {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch {}
-  },
-
-  remove(key) {
-    try {
-      localStorage.removeItem(key);
-    } catch {}
-  },
-
-  has(key) {
-    return localStorage.getItem(key) !== null;
-  },
-};
+function getCurrentLevel(doc = document) {
+  const match = doc
+    .querySelector(".gtb-level")
+    ?.textContent.match(/LV\s*(\d+)/);
+  return match ? Number(match[1]) : null;
+}
 
 // Pass in Battle page
 function getMonsterNameFromBattlePage(doc = document) {
@@ -124,7 +399,8 @@ function getMonsterNameFromBattlePage(doc = document) {
 
 // ------------------------ Settings Drawer --------------------------- //
 
-GM_addStyle(`.switch-label {
+GM_addStyle(`
+  .switch-label {
     position: relative;
     display: inline-flex;
     align-items: center;
@@ -166,6 +442,27 @@ GM_addStyle(`.switch-label {
   }`);
 
 GM_addStyle(`
+    .qs-list {
+      margin-bottom: 55px !important;
+      padding-bottom: 75px !important;
+    }
+
+    .qs-list input[type="text"],
+    .qs-list input[type="number"],
+    .qs-list input[type="email"],
+    .qs-list input[type="password"],
+    .qs-list input[type="search"],
+    .qs-list input[type="url"],
+    .qs-list input[type="tel"],
+    .qs-list textarea {
+      width: 100px;
+      padding: 2px 4px;
+      border-radius: 4px;
+      border: 1px solid #2d3154;
+      background: #2d3154;
+      color: #e6e8ff;
+    }
+
     .settings-drawer-trigger {
         position: fixed;
         right: 175px;
@@ -212,7 +509,7 @@ GM_addStyle(`
         display: flex;
         flex-direction: column;
         gap: 8px;
-        margin-bottom: 35px;
+        margin-bottom: 135px;
     }
 
     body.settingsdrawer-open #battleDrawerBackdrop {
@@ -298,15 +595,12 @@ function initSettingsDrawer() {
   }
   function closeDrawer() {
     bodyEl.classList.remove("settingsdrawer-open");
-    window.location.reload();
+    refreshPage();
   }
 
   openBtn.addEventListener("click", openDrawer);
   closeBtn.addEventListener("click", closeDrawer);
   backdrop.addEventListener("click", closeDrawer);
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeDrawer();
-  });
 }
 
 /**
@@ -405,10 +699,12 @@ function addToSettingsGroup(groupId, elements) {
  */
 function createSettingsInput({
   key,
+  id = "",
   label,
   type = "checkbox",
   defaultValue = null,
   inputProps = {},
+  containerProps = {},
   options = [],
   onChange = null,
 }) {
@@ -428,11 +724,19 @@ function createSettingsInput({
   container.style.cursor = "pointer";
   container.style.marginTop = "6px";
 
+  // Assign extra properties
+  const { style, ...rest } = containerProps;
+  Object.assign(container, rest);
+  if (style) {
+    Object.assign(container.style, style);
+  }
+
   // Label text
   const textEl = document.createElement("span");
   textEl.textContent = label;
   textEl.style.marginLeft = "5px";
   textEl.style.marginRight = "5px";
+  textEl.style.fontSize = "14px";
 
   let input;
 
@@ -462,7 +766,11 @@ function createSettingsInput({
   }
 
   // Assign extra properties
-  Object.assign(input, inputProps);
+  const { style: style2, ...rest2 } = inputProps;
+  Object.assign(input, rest2);
+  if (style2) {
+    Object.assign(input.style, style2);
+  }
 
   // Tag input for discovery
   input.dataset.settingKey = key;
@@ -483,7 +791,7 @@ function createSettingsInput({
     }
   });
 
-  input.id = key;
+  input.id = id || key;
 
   // Optional slider styling compatibility
   if (type === "checkbox") {
@@ -510,3 +818,339 @@ function createSettingsInput({
 initSettingsDrawer();
 
 // ------------------------ Settings Drawer --------------------------- //
+
+function injectIntoPage(fn) {
+  const script = document.createElement("script");
+  script.textContent = `(${fn.toString()})();`;
+  document.documentElement.appendChild(script);
+  script.remove();
+}
+
+// IN BROWSER DEBUGGING
+await (async function () {
+  const useDebugConsole = Storage.get("ui-improvements:debugConsole", false);
+  let container = document.getElementById("debug-log-container");
+  const LOG_KEY = "ui-improvements:debugConsole:logs";
+  const MAX_LOGS = 500;
+  if (useDebugConsole) {
+    if (!container) {
+      injectIntoPage(function () {
+        if (window.__DEBUG_CONSOLE_INSTALLED__) return;
+        window.__DEBUG_CONSOLE_INSTALLED__ = true;
+
+        const METHODS = ["log", "warn", "error", "info", "debug", "trace"];
+
+        const original = {};
+
+        function send(type, args) {
+          window.postMessage(
+            {
+              __DEBUG_CONSOLE__: true,
+              type,
+              args: args.map((a) => {
+                try {
+                  return typeof a === "object" ? structuredClone(a) : a;
+                } catch {
+                  return String(a);
+                }
+              }),
+            },
+            "*"
+          );
+        }
+
+        METHODS.forEach((type) => {
+          original[type] = console[type];
+          console[type] = (...args) => {
+            original[type]?.apply(console, args);
+            send(type, args);
+          };
+        });
+
+        window.addEventListener("error", (e) => {
+          send("error", [e.message, `${e.filename}:${e.lineno}`]);
+        });
+
+        window.addEventListener("unhandledrejection", (e) => {
+          send("error", ["Unhandled Promise Rejection", e.reason]);
+        });
+
+        console.log("Debug console attached (page context)");
+      });
+
+      window.addEventListener("message", (e) => {
+        if (!e.data || e.data.__DEBUG_CONSOLE__ !== true) return;
+        appendLog(e.data.type, e.data.args);
+      });
+
+      // ==========================
+      // Inject Styles
+      // ==========================
+      const style = document.createElement("style");
+      style.textContent = `
+        #debug-log-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            z-index: 99999;
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+            transform: translateY(20px);
+            pointer-events: none;
+            transition: opacity 0.25s ease, transform 0.25s ease;
+        }
+    
+        #debug-log-modal.open {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+    
+        #debug-log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 14px;
+            background: #0f172a;
+            border-bottom: 1px solid #1e293b;
+            color: #e5e7eb;
+            font-weight: 600;
+        }
+    
+        #debug-log-close {
+            background: none;
+            border: none;
+            color: #e5e7eb;
+            font-size: 20px;
+            cursor: pointer;
+        }
+    
+        #debug-log-container {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            background: #020617;
+        }
+    
+        .debug-log-entry {
+            margin-bottom: 4px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+    
+        .debug-log-log { color: #e5e7eb; }
+        .debug-log-warn { color: #facc15; }
+        .debug-log-error { color: #f87171; }
+        .debug-log-info { color: #38bdf8; }
+        .console-trigger {
+            position: fixed;
+            right: 230px;
+            bottom: 17px;
+            z-index: 10001;
+            background: #24263a;
+            border: 1px solid #2f324d;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, .6);
+            border-radius: 12px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 14px;
+            line-height: 1.2;
+            padding: 10px 12px;
+            gap: 6px;
+        }
+        #debug-log-clear {
+            background: none;
+            border: 1px solid #334155;
+            color: #e5e7eb;
+            padding: 4px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        #debug-log-clear:hover {
+            background: #1e293b;    
+        }
+          
+        `;
+      document.head.appendChild(style);
+
+      // ==========================
+      // Create DOM
+      // ==========================
+      const modal = document.createElement("div");
+      modal.id = "debug-log-modal";
+
+      const header = document.createElement("div");
+      header.id = "debug-log-header";
+
+      const title = document.createElement("div");
+      title.textContent = "Debug Console";
+
+      const actions = document.createElement("div");
+      actions.style.display = "flex";
+      actions.style.gap = "8px";
+
+      const clearBtn = document.createElement("button");
+      clearBtn.id = "debug-log-clear";
+      clearBtn.textContent = "🧹";
+      clearBtn.title = "Clear logs";
+
+      clearBtn.addEventListener("click", () => {
+        container.innerHTML = "";
+        Storage.set("ui-improvements:debugConsole:logs", []);
+        console.log("[Debug Console] Logs cleared");
+      });
+
+      const closeBtn = document.createElement("button");
+      closeBtn.id = "debug-log-close";
+      closeBtn.textContent = "×";
+
+      container = document.createElement("div");
+      container.id = "debug-log-container";
+
+      const persistedLogs = Storage.get(LOG_KEY, []);
+
+      persistedLogs.forEach((entry) => {
+        appendLog(entry.type, entry.args, false);
+      });
+
+      // Prevent duplicate trigger button
+      if (!document.getElementById("openConsoleBtn")) {
+        const originalBtn = document.getElementById("openQuickSetDrawerBtn");
+        if (!originalBtn) {
+          console.error("Original Quick Sets trigger button not found.");
+          return;
+        }
+
+        const btn = originalBtn.cloneNode(true);
+        btn.id = "openConsoleBtn";
+
+        // Remove old classes and add new
+        btn.className = "";
+        btn.classList.add("console-trigger");
+
+        btn.title = "Open Console";
+        btn.textContent = "📟";
+
+        btn.addEventListener("click", () => {
+          openModal();
+        });
+
+        originalBtn.insertAdjacentElement("afterend", btn);
+      }
+
+      actions.appendChild(clearBtn);
+      actions.appendChild(closeBtn);
+      header.appendChild(title);
+      header.appendChild(actions);
+      modal.appendChild(header);
+      modal.appendChild(container);
+      document.body.appendChild(modal);
+
+      // ==========================
+      // Open / Close Logic
+      // ==========================
+      function openModal() {
+        modal.classList.add("open");
+      }
+
+      function closeModal() {
+        modal.classList.remove("open");
+      }
+
+      closeBtn.addEventListener("click", closeModal);
+      //   // Expose controls globally
+      //   window.openDebugLog = openModal;
+      //   window.closeDebugLog = closeModal;
+    } else {
+      console.log("container already exists, skipping");
+    }
+
+    // ==========================
+    // Console Hijacking
+    // ==========================
+    const originalConsole = {
+      log: console.log,
+      warn: console.warn,
+      error: console.error,
+      info: console.info,
+    };
+
+    // ==========================
+    // Console Bridge (Userscript)
+    // ==========================
+    function appendLog(type, args, persist = true) {
+      const entry = document.createElement("div");
+      entry.className = `debug-log-entry debug-log-${type}`;
+      const time = new Date().toLocaleTimeString();
+      entry.textContent =
+        `[${time}] [${type.toUpperCase()}] ` +
+        args
+          .map((a) =>
+            typeof a === "object" ? JSON.stringify(a, null, 2) : String(a)
+          )
+          .join(" ");
+
+      container.appendChild(entry);
+      container.scrollTop = container.scrollHeight;
+      if (!persist) {
+        return;
+      }
+
+      const persistLogsSetting = Storage.get(
+        "ui-improvements:persistLogs",
+        true
+      );
+      if (persistLogsSetting) {
+        const logs = Storage.get(LOG_KEY, []);
+        logs.push({
+          type,
+          time: Date.now(),
+          args,
+        });
+
+        if (logs.length > MAX_LOGS) {
+          logs.splice(0, logs.length - MAX_LOGS);
+        }
+
+        Storage.set(LOG_KEY, logs);
+      }
+    }
+
+    console.log = (...args) => {
+      originalConsole.log(...args);
+      appendLog("log", args);
+    };
+
+    console.warn = (...args) => {
+      originalConsole.warn(...args);
+      appendLog("warn", args);
+    };
+
+    console.error = (...args) => {
+      originalConsole.error(...args);
+      appendLog("error", args);
+    };
+
+    console.info = (...args) => {
+      originalConsole.info(...args);
+      appendLog("info", args);
+    };
+
+    Object.defineProperty(console, "log", {
+      configurable: false,
+      writable: false,
+      value: console.log,
+    });
+  }
+})();
