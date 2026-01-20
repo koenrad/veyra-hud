@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.2.3
+// @version      2.2.4
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,7 +30,9 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `v2.2.3: 
+const PATCH_NOTES = `
+- Added menu link to Lunar Plague event
+v2.2.3: 
 - vanilla loot-x button now ignores boss corpses (if set)
 v2.2.2:
 - fixed dungeon loot error when exp, gold or damage is zero
@@ -286,6 +288,8 @@ v2.2.2:
         "Weekly Leaderboard",
         "🏆"
       );
+
+      addMenuLinkAfter("Home", "/lunar_plague.php", "Lunar Plague Event", "☣️");
 
       addMenuLinkAfter("Guild", "/guild_dungeon.php", "Guild Dungeons", "🕳️");
     }

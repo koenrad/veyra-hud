@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Veyra Hud Core
 // @namespace    http://tampermonkey.net/
-// @version      2.0.5
+// @version      2.0.6
 // @description  Core functionality for veyra-hud
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
@@ -25,13 +25,20 @@ function upgradeCheck(patchNotes = "") {
     true
   );
   if (previousVersion !== scriptVersion) {
+    // TODO:: remove this next version
     Storage.set(`${scriptName}:version`, scriptVersion);
     let direction = checkVersion(scriptVersion, previousVersion)
       ? "upgraded"
       : "downgraded";
     if (enableNewVersionNotification) {
       pageAlert(
-        `${scriptName} ${direction} from v${previousVersion} => v${scriptVersion}:\n${patchNotes}`
+        `${scriptName} ${direction} from v${previousVersion} => v${scriptVersion}:\n${patchNotes}`,
+        {
+          title: "Version Changed",
+          onClick: () => {
+            Storage.set(`${scriptName}:version`, scriptVersion);
+          },
+        }
       );
     }
   }
@@ -244,7 +251,7 @@ function checkVersion(v1, v2) {
 }
 
 function pageAlert(message, options = {}) {
-  const { title = "Alert", buttonText = "OK" } = options;
+  const { title = "Alert", buttonText = "OK", onClick = () => {} } = options;
 
   // Create overlay
   const overlay = document.createElement("div");
@@ -303,6 +310,7 @@ function pageAlert(message, options = {}) {
   const close = () => {
     overlay.remove();
     document.removeEventListener("keydown", onKey);
+    onClick();
   };
 
   // Close on click or Enter/Escape
