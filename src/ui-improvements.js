@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.2.2
+// @version      2.2.3
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,7 +30,10 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- fixed dungeon loot error when exp, gold or damage is zero
+const PATCH_NOTES = `v2.2.3: 
+- vanilla loot-x button now ignores boss corpses (if set)
+v2.2.2:
+- fixed dungeon loot error when exp, gold or damage is zero
 - fixed padding at the bottom of the battle-consumables (iOS)`;
 
 //TODO:: add this whitelist to mob pagination trick
@@ -826,6 +829,11 @@ const PATCH_NOTES = `- fixed dungeon loot error when exp, gold or damage is zero
       const $btn = document.querySelector("#btnLootX"); // replace with actual selector
       if (!$btn) return;
 
+      const ignoreBossMobsWhenLooting = Storage.get(
+        "ui-improvements:ignoreBossMobsWhenLooting",
+        true
+      );
+
       // Find the existing click listeners
       const oldHandler = $btn.onclick || $btn.__lootHandler;
       // Remove it from the button (if needed)
@@ -838,7 +846,16 @@ const PATCH_NOTES = `- fixed dungeon loot error when exp, gold or damage is zero
         const n = Math.max(1, parseInt($input.value || "1", 10));
         const eligibleEls = Array.from(
           document.querySelectorAll('.monster-card[data-eligible="1"]')
-        );
+        ).filter((el) => {
+          const name = el.dataset.name?.toLowerCase().trim();
+          if (ignoreBossMobsWhenLooting) {
+            if (LOOTING_BLACKLIST_SET.has(name)) {
+              return false;
+            }
+          }
+          return true;
+        });
+
         const targetIds = eligibleEls
           .slice(0, n)
           .map((el) => parseInt(el.dataset.monsterId, 10))
@@ -885,7 +902,7 @@ const PATCH_NOTES = `- fixed dungeon loot error when exp, gold or damage is zero
             fail++;
             allNotes.push("Server error");
           }
-          await new Promise((r) => setTimeout(r, 150));
+          // await new Promise((r) => setTimeout(r, 150));
         }
         $stat.textContent = `Done. Looted ${ok}, failed ${fail}.`;
         setRunning(false);
