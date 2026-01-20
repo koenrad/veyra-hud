@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.2.4
+// @version      2.2.5
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -31,6 +31,11 @@ const LOOTING_BLACKLIST_SET = new Set(
 );
 
 const PATCH_NOTES = `
+- Added Asterion stamina calculations to attack buttons on battle page (Global Settings => Better Attack Buttons).
+- Asterion multiplier support added to battle page (Global Settings => Use Asterion | Asterion Multiplier)
+- Asterion multiplier updates when on Pets Inventory
+- Styling of text inputs in settings drawer
+v2.2.4:
 - Added menu link to Lunar Plague event
 v2.2.3: 
 - vanilla loot-x button now ignores boss corpses (if set)
@@ -198,6 +203,16 @@ v2.2.2:
 
   // -------------------- Menu Sidebar / Navigation -------------------- //
 
+  // Get asterion settings from storage
+  const useAsterion = Storage.get("ui-improvements:useAsterion", false);
+  const asterionValue = parseFloat(
+    Storage.get("ui-improvements:asterionValue", 1.5)
+  );
+  const useBetterAttackButtons = Storage.get(
+    "ui-improvements:useBetterAttackButtons",
+    true
+  );
+
   const { container: useCustomNavigationToggle } = createSettingsInput({
     key: "ui-improvements:useCustomNavigation",
     label: "Custom Navigation",
@@ -206,9 +221,45 @@ v2.2.2:
     inputProps: { slider: true },
   });
 
+  const { container: useBetterAttackButtonsToggle } = createSettingsInput({
+    key: "ui-improvements:useBetterAttackButtons",
+    label: "Better Attack Buttons",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
+  const { container: asterionValueContainer } = createSettingsInput({
+    key: "ui-improvements:asterionValue",
+    label: "Asterion Multiplier",
+    defaultValue: 1.5,
+    type: "number",
+    inputProps: {
+      step: 0.5,
+      style: { width: "100px" },
+    },
+    containerProps: {
+      style: { display: useAsterion ? "flex" : "none" },
+    },
+  });
+
+  const { container: useAsterionToggle } = createSettingsInput({
+    key: "ui-improvements:useAsterion",
+    label: "Use Asterion",
+    defaultValue: false,
+    type: "checkbox",
+    inputProps: { slider: true },
+    onChange: (value) => {
+      asterionValueContainer.style.display = value ? "flex" : "none";
+    },
+  });
+
   addSettingsGroup("global", "Global Settings", "Global settings", [
     useCustomNavigationToggle,
     betterGameTopBarToggle,
+    useBetterAttackButtonsToggle,
+    useAsterionToggle,
+    asterionValueContainer,
   ]);
 
   const useCustomNavigation = Storage.get(
@@ -295,6 +346,73 @@ v2.2.2:
     }
   }
   // -------------------- Menu Sidebar / Navigation -------------------- //
+
+  // -------------------------- Battle Page ---------------------------- //
+  // Change the slash buttons to show stamina usage with asterion multiplier
+  if (useBetterAttackButtons) {
+    document.querySelectorAll(".attack-btn").forEach((btn) => {
+      // CASE 1: buttons with MP / STAM layout
+      const costEl = btn.querySelector(".skill-cost");
+      if (costEl) {
+        const text = costEl.textContent.trim();
+
+        // Match "20 MP / 200 STAM"
+        const match = text.match(/(\d+)\s*MP\s*\/\s*(\d+)\s*STAM/i);
+        if (!match) return;
+
+        const mp = match[1];
+        const baseStam = Number(match[2]);
+        const finalStam = useAsterion ? baseStam * asterionValue : baseStam;
+
+        costEl.textContent = `${mp} MP / ${finalStam} STAM`;
+        return;
+      }
+
+      // CASE 2: simple text buttons
+      const text = btn.textContent.trim();
+
+      // Try to extract stamina cost from "(X STAMINA)"
+      const match = text.match(/\((\d+)\s*STAMINA\)/i);
+
+      const baseCost = match ? Number(match[1]) : 1; // Slash defaults to 1
+      const finalCost = useAsterion ? baseCost * asterionValue : baseCost;
+
+      // Remove any existing "(...)" part to get clean name
+      const name = text.replace(/\s*\(.*?\)\s*/, "");
+
+      // Update button text
+      btn.textContent = `${name} (${finalCost})`;
+    });
+  }
+  // -------------------------- Battle Page ---------------------------- //
+
+  // ---------------------------- Pets Page ---------------------------- //
+  if (document.location.href.includes("pets.php")) {
+    document.querySelectorAll(".slot-box").forEach((slot) => {
+      // Find pet name (from image alt or info button)
+      const name =
+        slot.querySelector("img")?.alt ||
+        slot.querySelector(".pet-info-overlay")?.dataset.name ||
+        "";
+
+      if (!/Asterion/i.test(name)) return;
+
+      // Look for multiplier text
+      const powerText =
+        slot.querySelector(".pet-power")?.textContent ||
+        slot.querySelector(".pet-info-overlay")?.dataset.desc ||
+        "";
+
+      // Match "x3", "x 3", etc.
+      const match = powerText.match(/x\s*(\d+)/i);
+      if (!match) return;
+
+      const foundAsterionValue = Number(match[1]);
+      if (asterionValue !== foundAsterionValue) {
+        Storage.set("ui-improvements:asterionValue", foundAsterionValue);
+      }
+    });
+  }
 
   // --------------------- Adventurer's Guild Page --------------------- //
   // Align the accept quest button on the Adventurer's Guild to the bottom of the element
