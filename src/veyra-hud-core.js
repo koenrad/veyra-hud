@@ -493,7 +493,7 @@ GM_addStyle(`
         display: flex;
         flex-direction: column;
         gap: 8px;
-        margin-bottom: 35px;
+        margin-bottom: 135px;
     }
 
     body.settingsdrawer-open #battleDrawerBackdrop {
