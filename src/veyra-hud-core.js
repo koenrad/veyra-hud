@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Veyra Hud Core
 // @namespace    http://tampermonkey.net/
-// @version      2.0.4
+// @version      2.0.5
 // @description  Core functionality for veyra-hud
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
@@ -13,7 +13,7 @@
 
 const VHC_USER_ID = await getUserId();
 
-function upgradeCheck() {
+function upgradeCheck(patchNotes = "") {
   const scriptVersion = GM_info.script.version;
   const scriptName = GM_info.script.name;
   const previousVersion = Storage.get(
@@ -31,7 +31,7 @@ function upgradeCheck() {
       : "downgraded";
     if (enableNewVersionNotification) {
       pageAlert(
-        `${scriptName} ${direction} from v${previousVersion} => v${scriptVersion}`
+        `${scriptName} ${direction} from v${previousVersion} => v${scriptVersion}:\n${patchNotes}`
       );
     }
   }
