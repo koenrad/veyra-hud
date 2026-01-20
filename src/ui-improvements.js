@@ -2229,6 +2229,13 @@ const PATCH_NOTES = `- fixed dungeon loot error when exp, gold or damage is zero
 
   // ------------------------- Battle Side Bar ------------------------- //
 
+  GM_addStyle(`
+    #battleDrawer {
+      overflow: auto;
+      padding-bottom: 150px !important
+    }
+  `);
+
   (function sideBar() {
     const drawer = document.getElementById("battleDrawer");
     if (!drawer) return;
