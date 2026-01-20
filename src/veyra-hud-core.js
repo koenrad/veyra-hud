@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Veyra Hud Core
 // @namespace    http://tampermonkey.net/
-// @version      2.0.6
+// @version      2.0.7
 // @description  Core functionality for veyra-hud
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
@@ -447,7 +447,14 @@ GM_addStyle(`
       padding-bottom: 75px !important;
     }
 
-    .qs-list input[type="text"] {
+    .qs-list input[type="text"],
+    .qs-list input[type="number"],
+    .qs-list input[type="email"],
+    .qs-list input[type="password"],
+    .qs-list input[type="search"],
+    .qs-list input[type="url"],
+    .qs-list input[type="tel"],
+    .qs-list textarea {
       width: 100px;
       padding: 2px 4px;
       border-radius: 4px;
@@ -455,6 +462,7 @@ GM_addStyle(`
       background: #2d3154;
       color: #e6e8ff;
     }
+
     .settings-drawer-trigger {
         position: fixed;
         right: 175px;
@@ -728,6 +736,7 @@ function createSettingsInput({
   textEl.textContent = label;
   textEl.style.marginLeft = "5px";
   textEl.style.marginRight = "5px";
+  textEl.style.fontSize = "14px";
 
   let input;
 
