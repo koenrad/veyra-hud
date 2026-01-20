@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Gamba is My Way (enhanced)
 // @namespace    https://papa-zeus-777.net
-// @version      1.0.1
+// @version      1.0.2
 // @description  Papa Zeus 777 MAX WIN, Dare to TRY????
 // @author       Papa ZEUS - enhanced by [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/gamba-enhanced.js
 // @downloadURL  https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/gamba-enhanced.js
-// @match        https://demonicscans.org/a_lizardmen_winter.php
+// @match        https://demonicscans.org/lunar_plague.php
 // @grant        none
 // ==/UserScript==
 
@@ -92,8 +92,8 @@
 
   gamba.addEventListener("click", async () => {
     // Get current values from input fields
-    const eventId = 4;
-    const machineId = 2;
+    const eventId = 6;
+    const machineId = 3;
     const totalPull = parseInt(wrapper.querySelector("#gambaPull").value) || 1;
 
     // Clear previous results
@@ -174,7 +174,7 @@
       // Create the count element
       const count = document.createElement("span");
       count.className = "itemCount"; // Add a class for styling (optional)
-      count.textContent = itemCountMap[itemName].count; // Display the count
+      count.textContent = `x${itemCountMap[itemName].count}`; // Display the count
 
       newItem.appendChild(img);
       newItem.appendChild(count);
