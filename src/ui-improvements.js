@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.2.1
+// @version      2.2.2
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,12 +30,15 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
+const PATCH_NOTES = `- fixed dungeon loot error when exp, gold or damage is zero
+- fixed padding at the bottom of the battle-consumables (iOS)`;
+
 //TODO:: add this whitelist to mob pagination trick
 (async function () {
   ("use strict");
 
   if (typeof upgradeCheck === "function") {
-    upgradeCheck();
+    upgradeCheck(PATCH_NOTES);
   }
 
   GM_addStyle(`
@@ -277,7 +280,7 @@ const LOOTING_BLACKLIST_SET = new Set(
       addMenuLinkAfter(
         "Battle Pass",
         "/weekly.php",
-        "Weekly Leaterboard",
+        "Weekly Leaderboard",
         "🏆"
       );
 
@@ -2226,19 +2229,15 @@ const LOOTING_BLACKLIST_SET = new Set(
 
   // ------------------------- Battle Side Bar ------------------------- //
 
-  GM_addStyle(
-    `
-
-    `
-  );
   (function sideBar() {
     const drawer = document.getElementById("battleDrawer");
     if (!drawer) return;
     // Make sidebar scrollable. (GM_addStyle didn't work for some reason)
     drawer.style.overflow = "auto";
+    drawer.style.setProperty("padding-bottom", "150px", "important");
     // add padding to last element so it's not below the chat button
     const lastElement = drawer.lastElementChild;
-    lastElement.style.marginBottom = "100px";
+    lastElement.style.setProperty("margin-bottom", "100px", "important");
   })();
   // ------------------------- Battle Side Bar ------------------------- //
 
@@ -2434,9 +2433,9 @@ const LOOTING_BLACKLIST_SET = new Set(
         const rewards = lootData.rewards;
         if (
           !rewards ||
-          !rewards.exp ||
-          !rewards.gold ||
-          !rewards.damage_dealt
+          !("exp" in rewards) ||
+          !("gold" in rewards) ||
+          !("damage_dealt" in rewards)
         ) {
           throw new Error("no rewards object");
         }
