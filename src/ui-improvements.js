@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.2.5
+// @version      2.2.6
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,7 +30,8 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `
+const PATCH_NOTES = `- Adds a link in navigation menu to open settings (some browsers had issues with the regular button)
+2.2.5
 - Added Asterion stamina calculations to attack buttons on battle page (Global Settings => Better Attack Buttons).
 - Asterion multiplier support added to battle page (Global Settings => Use Asterion | Asterion Multiplier)
 - Asterion multiplier updates when on Pets Inventory
@@ -157,6 +158,7 @@ v2.2.2:
 
     // Insert after the target
     targetLink.insertAdjacentElement("afterend", newLink);
+    return newLink;
   }
 
   // ---------------------------- Top Bar ------------------------------- //
@@ -339,6 +341,18 @@ v2.2.2:
         "Weekly Leaderboard",
         "🏆"
       );
+
+      const settingsTrigger = addMenuLinkAfter(
+        "Weekly Leaderboard",
+        "#",
+        "Veyra-Hud Settings",
+        "⚙️"
+      );
+      settingsTrigger.addEventListener("click", () => {
+        if (typeof settingsDrawer?.open === "function") {
+          settingsDrawer.open();
+        }
+      });
 
       addMenuLinkAfter("Home", "/lunar_plague.php", "Lunar Plague Event", "☣️");
 
