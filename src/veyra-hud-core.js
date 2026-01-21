@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Veyra Hud Core
 // @namespace    http://tampermonkey.net/
-// @version      2.0.7
+// @version      2.0.8
 // @description  Core functionality for veyra-hud
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
@@ -12,6 +12,8 @@
 // ==/UserScript==
 
 const VHC_USER_ID = await getUserId();
+
+let settingsDrawer = {};
 
 function upgradeCheck(patchNotes = "") {
   const scriptVersion = GM_info.script.version;
@@ -521,6 +523,7 @@ GM_addStyle(`
     }
 
     `);
+
 function initSettingsDrawer() {
   const bodyEl = document.body;
 
@@ -597,6 +600,9 @@ function initSettingsDrawer() {
     bodyEl.classList.remove("settingsdrawer-open");
     refreshPage();
   }
+
+  settingsDrawer.open = openDrawer;
+  settingsDrawer.close = closeDrawer;
 
   openBtn.addEventListener("click", openDrawer);
   closeBtn.addEventListener("click", closeDrawer);
