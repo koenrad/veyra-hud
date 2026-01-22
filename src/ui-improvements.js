@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.2.6
+// @version      2.2.7
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,7 +30,9 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- Adds a link in navigation menu to open settings (some browsers had issues with the regular button)
+const PATCH_NOTES = `- Adds heal button next to health bar on wave page.
+2.2.6:
+- Adds a link in navigation menu to open settings (some browsers had issues with the regular button)
 2.2.5
 - Added Asterion stamina calculations to attack buttons on battle page (Global Settings => Better Attack Buttons).
 - Asterion multiplier support added to battle page (Global Settings => Use Asterion | Asterion Multiplier)
@@ -92,10 +94,9 @@ v2.2.2:
 
   async function useHealthPotion() {
     try {
-      const userId = await getUserId();
       if (!userId) {
         showNotification("USER_ID not set!", "error");
-        return;
+        return false;
       }
 
       const fd = new URLSearchParams();
@@ -121,17 +122,19 @@ v2.2.2:
           data?.message || raw.slice(0, 200) || `HTTP ${res.status}`,
           "error"
         );
-        return;
+        return false;
       }
       if (String(data.status).trim() === "success") {
         showNotification(data.message || "Healed!", "success");
-        setTimeout(() => refreshPage(), 500);
+        return true;
       } else {
         showNotification(data.message || "Heal failed.", "error");
+        return false;
       }
     } catch (e) {
       console.log(e);
       showNotification("Network error.", "error");
+      return false;
     }
   }
 
@@ -1095,6 +1098,63 @@ v2.2.2:
       }
     }
     // --------- In Battle Count Injection End ---------//
+
+    // ----------------- Add Heal Button ---------------//
+    (function () {
+      GM_addStyle(`
+      .res-label {
+        min-width: 150px;
+      }
+      `);
+      // Find the HP row
+      const hpRow = [...document.querySelectorAll(".res-row")].find((row) =>
+        row.querySelector(".res-label")?.textContent.includes("Hp")
+      );
+
+      if (!hpRow) return;
+
+      const label = hpRow.querySelector(".res-label");
+      const hpFill = hpRow.querySelector(".res-fill.stamina");
+
+      if (!label || !hpFill) return;
+
+      // Prevent duplicates
+      if (label.querySelector(".heal-btn")) return;
+
+      // Create button
+      const healBtn = document.createElement("button");
+      healBtn.className = "heal-btn btn";
+      healBtn.textContent = "💚 Heal";
+      healBtn.title = "Heal to full";
+
+      // Style via JS
+      Object.assign(healBtn.style, {
+        marginLeft: "6px",
+        cursor: "pointer",
+        fontSize: "14px",
+        lineHeight: "1",
+      });
+
+      // Ensure layout
+      label.style.display = "flex";
+      label.style.alignItems = "center";
+
+      label.appendChild(healBtn);
+
+      // Click behavior
+      const meta = hpRow.querySelector(".res-meta");
+      healBtn.addEventListener("click", async () => {
+        const usedPotion = await useHealthPotion();
+        if (usedPotion) {
+          hpFill.style.width = "100%";
+          if (meta) {
+            const max = meta.textContent.split("/")[1].trim();
+            meta.textContent = `${max} / ${max}`;
+          }
+        }
+      });
+    })();
+    // ----------------- Add Heal Button ---------------//
 
     // ------------- Custom Attack Strategy ------------//
 
