@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.2.8
+// @version      2.2.9
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,7 +30,9 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- Unlocks the select visible limit on multi attack
+const PATCH_NOTES = `- disables gate info for better scrolling (can be re-enabled in wave page options)
+2.2.8
+- Unlocks the select visible limit on multi attack
 - Removed duplicate navigation link to Adventurer's Guild
 2.2.7:
 - Adds heal button next to health bar on wave page.
@@ -618,6 +620,14 @@ v2.2.2:
     inputProps: { slider: true },
   });
 
+  const { container: disableGateInfoToggle } = createSettingsInput({
+    key: "ui-improvements:disableGateInfoToggle",
+    label: "Disable Gate Info",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
   let showUseParallelToggle = enableCustomAttackStrategyInput.checked;
   useParallelJoinsToggle.style.display = showUseParallelToggle
     ? "flex"
@@ -639,6 +649,10 @@ v2.2.2:
   );
   const unlockSelectLimit = Storage.get(
     "ui-improvements:unlockSelectLimit",
+    true
+  );
+  const disableGateInfo = Storage.get(
+    "ui-improvements:disableGateInfoToggle",
     true
   );
 
@@ -718,6 +732,7 @@ v2.2.2:
       enableLootXFasterToggle,
       flashHpBarWhenLowContainer,
       ignoreBossMobsWhenLootingContainer,
+      disableGateInfoToggle,
     ]
   );
 
@@ -2342,6 +2357,15 @@ v2.2.2:
     }
 
     // -------------- Unlock select all ---------------- //
+
+    // -------------- Gate Info Scroll Removal ---------------- //
+    if (disableGateInfo) {
+      const gateInfoScroll = document.querySelector(".gate-info-scroll");
+      if (gateInfoScroll) {
+        gateInfoScroll.innerHTML = `<div class="gate-desc">Gate info hidden, check wave page options in veyra-hud settings to enable it</div>`;
+      }
+    }
+    // -------------- Gate Info Scroll Removal ---------------- //
   }
   // -------------------------- Wave X Page ---------------------------- //
 
