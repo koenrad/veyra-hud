@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.2.7
+// @version      2.2.8
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,7 +30,10 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- Adds heal button next to health bar on wave page.
+const PATCH_NOTES = `- Unlocks the select visible limit on multi attack
+- Removed duplicate navigation link to Adventurer's Guild
+2.2.7:
+- Adds heal button next to health bar on wave page.
 2.2.6:
 - Adds a link in navigation menu to open settings (some browsers had issues with the regular button)
 2.2.5
@@ -315,13 +318,6 @@ v2.2.2:
         "/black_merchant.php",
         "Black Merchant",
         "💀"
-      );
-
-      addMenuLinkAfter(
-        "Wave 3",
-        "/adventurers_guild.php",
-        "Adventurer's Guild",
-        "🛡️"
       );
 
       addMenuLinkAfter(
@@ -614,6 +610,14 @@ v2.2.2:
     }
   );
 
+  const { container: unlockSelectLimitToggle } = createSettingsInput({
+    key: "ui-improvements:unlockSelectLimit",
+    label: "Unlock Select Visible",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
   let showUseParallelToggle = enableCustomAttackStrategyInput.checked;
   useParallelJoinsToggle.style.display = showUseParallelToggle
     ? "flex"
@@ -632,6 +636,10 @@ v2.2.2:
   const maxHpValue = Storage.get(
     "ui-improvements:maxHpValue",
     Number.MAX_SAFE_INTEGER
+  );
+  const unlockSelectLimit = Storage.get(
+    "ui-improvements:unlockSelectLimit",
+    true
   );
 
   const { container: sortMobsByHpInSettingsToggle } = createSettingsInput({
@@ -691,6 +699,7 @@ v2.2.2:
     "Wave Filtering",
     "settings related to wave filtering",
     [
+      unlockSelectLimitToggle,
       sortMobsByHpInSettingsToggle,
       filterMobsByHpInSettingsToggle,
       minHpValueToggle,
@@ -2307,6 +2316,32 @@ v2.2.2:
       }
     })();
     // --------- Group Mobs in their own row ----------- //
+
+    // -------------- Unlock select all ---------------- //
+    if (unlockSelectLimit) {
+      const btnSel = document.getElementById("btnSelectVisible");
+
+      btnSel?.addEventListener("click", () => {
+        let picked = 0;
+        const cards = document.querySelectorAll(".monster-card");
+        cards.forEach((card) => {
+          if (card.dataset.dead === "1") return;
+          if (card.style.display === "none") return;
+
+          const cb = card.querySelector(".pickMonster");
+          if (cb) {
+            cb.checked = true;
+            picked++;
+          }
+        });
+
+        const statusEl = document.getElementById("batchAttackStatus");
+        if (!statusEl) return;
+        statusEl.innerHTML = `Selected: <b>${picked}/${cards.length}</b>`;
+      });
+    }
+
+    // -------------- Unlock select all ---------------- //
   }
   // -------------------------- Wave X Page ---------------------------- //
 
