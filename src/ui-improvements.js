@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.2.9
+// @version      2.2.10
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,8 +30,11 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- disables gate info for better scrolling (can be re-enabled in wave page options)
-2.2.8
+const PATCH_NOTES = `- faster loot-x now batches looting by 200's (less failures)
+- Added responsive messages to loot-x for better bulk looting
+2.2.9:
+- disables gate info for better scrolling (can be re-enabled in wave page options)
+2.2.8:
 - Unlocks the select visible limit on multi attack
 - Removed duplicate navigation link to Adventurer's Guild
 2.2.7:
@@ -764,101 +767,122 @@ v2.2.2:
 
     // -------------- Loot X Faster ---------------- //
 
-    async function getLootableMobs(numMobs = 1) {
+    function getEligibleMobs(doc = document) {
       const ignoreBossMobsWhenLooting = Storage.get(
         "ui-improvements:ignoreBossMobsWhenLooting",
         true
       );
+      const els = Array.from(
+        doc.querySelectorAll('.monster-card[data-eligible="1"]')
+      );
+      return els
+        .filter((el) => {
+          const name = el.dataset.name?.toLowerCase().trim();
+          if (ignoreBossMobsWhenLooting) {
+            if (LOOTING_BLACKLIST_SET.has(name)) {
+              return false;
+            }
+          }
+          return true;
+        })
+        .map((el) => parseInt(el.dataset.monsterId, 10));
+    }
+
+    async function getLootableMobs(numMobs = 1) {
       const unclaimedKills = [...document.querySelectorAll(".unclaimed-pill")]
         .find((el) => el.textContent.includes("Unclaimed kills"))
         ?.querySelector(".count")?.textContent;
-
       const unclaimedKillsNumber = Number(unclaimedKills);
+      const actualNumberToLoot = Math.min(numMobs, unclaimedKillsNumber);
       const numPages = Math.ceil(unclaimedKillsNumber / PAGINATION_PAGE_SIZE);
 
       const url = new URL(window.location.href);
-      const targetIds = new Set();
-      for (let i = 1; i <= numPages; i += 1) {
-        url.searchParams.set("dead_page", i.toString());
-        try {
-          const doc = await internalFetch(url.toString());
-          const els = Array.from(
-            doc.querySelectorAll('.monster-card[data-eligible="1"]')
-          );
-
-          els
-            .filter((el) => {
-              const name = el.dataset.name?.toLowerCase().trim();
-              if (ignoreBossMobsWhenLooting) {
-                if (LOOTING_BLACKLIST_SET.has(name)) {
-                  return false;
-                }
-              }
-              return true;
-            })
-            .map((el) => parseInt(el.dataset.monsterId, 10))
-            .filter(Boolean)
-            .forEach((id) => {
-              if (targetIds.size < numMobs) {
-                targetIds.add(id);
-              }
-            });
-          if (targetIds.size >= numMobs) {
-            break;
+      const targetIds = new Set(getEligibleMobs());
+      $stat.textContent = `Gathering page 1, collected: ${targetIds.size}/${actualNumberToLoot}`;
+      if (targetIds.size < actualNumberToLoot) {
+        for (let i = 2; i <= numPages; i += 1) {
+          url.searchParams.set("dead_page", i.toString());
+          $stat.textContent = `Gathering page ${i}, collected: ${targetIds.size}/${actualNumberToLoot}`;
+          try {
+            const doc = await internalFetch(url.toString());
+            const eligibleMobIds = getEligibleMobs(doc);
+            for (const mobId of eligibleMobIds) {
+              targetIds.add(mobId);
+            }
+            if (targetIds.size >= actualNumberToLoot) {
+              break;
+            }
+          } catch (e) {
+            console.error(
+              `Error encountered while fetching dead mobs on page ${i}:`,
+              e
+            );
+            $stat.textContent = `Error encountered while fetching dead mobs on page ${i}.... continuing`;
+            await sleep(3000);
           }
-        } catch (e) {
-          console.error(
-            `Error encountered while fetching dead mobs on page ${i}:`,
-            e
-          );
         }
       }
 
-      return [...targetIds];
+      return [...targetIds].slice(0, actualNumberToLoot);
     }
 
     const enableLootXFaster = Storage.get(
       "ui-improvements:enableLootXFaster",
       true
     );
+    const $stat = document.getElementById("lootStatus");
+    $stat.style.flexBasis = "100%";
+    $stat.parentElement.style.flexWrap = "wrap";
     if (enableLootXFaster) {
       function overrideLootX() {
         const btnLootX = document.getElementById("btnLootX");
-        if (btnLootX) {
-          const customBtn = document.createElement("button");
-          customBtn.id = "btnCustomLoot";
-          customBtn.type = "button";
-          customBtn.className = "custom-loot-btn";
-          customBtn.textContent = "💰 Loot X monsters (super fast)";
+        if (!btnLootX) return;
 
-          btnLootX.insertAdjacentElement("afterend", customBtn);
-          btnLootX.textContent = "💰 Loot X monsters (vanilla)";
+        const customBtn = document.createElement("button");
+        customBtn.id = "btnCustomLoot";
+        customBtn.type = "button";
+        customBtn.className = "custom-loot-btn";
+        customBtn.textContent = "💰 Loot X monsters (super fast)";
 
-          customBtn?.addEventListener("click", async () => {
-            const n = Math.max(1, parseInt($input.value || "1", 10));
-            const eligibleEls = Array.from(
-              document.querySelectorAll('.monster-card[data-eligible="1"]')
-            );
-            let targetIds = await getLootableMobs(n);
+        btnLootX.insertAdjacentElement("afterend", customBtn);
+        btnLootX.textContent = "💰 Loot X monsters (vanilla)";
 
-            if (targetIds.length === 0) {
-              $stat.textContent = "No eligible dead monsters you joined.";
-              return;
-            }
+        const BATCH_SIZE = 200;
 
-            setRunning(true);
-            let ok = 0;
-            let fail = 0;
-            let totalExp = 0;
-            let totalGold = 0;
-            let totalDmg = 0;
-            const allItems = [];
-            const allNotes = [];
-            const promises = targetIds.map(async (targetId, i) => {
-              $stat.textContent = `Looting ${i + 1}/${
-                targetIds.length
-              }... (success: ${ok}, fail: ${fail})`;
+        customBtn.addEventListener("click", async () => {
+          customBtn.classList.add("is-running");
+          customBtn.textContent = "Working...";
+          btnLootX.classList.add("is-running");
+          btnLootX.textContent = "Working...";
 
+          const n = Math.max(1, parseInt($input.value || "1", 10));
+          $stat.textContent = `Gathering ${n.toLocaleString()} mobs to loot...`;
+          const targetIds = await getLootableMobs(n);
+
+          if (!targetIds.length) {
+            $stat.textContent = "No eligible dead monsters you joined.";
+            return;
+          }
+
+          let ok = 0;
+          let fail = 0;
+          let totalExp = 0;
+          let totalGold = 0;
+          let totalDmg = 0;
+          const allItems = [];
+          const allNotes = [];
+
+          const total = targetIds.length;
+
+          // Split into batches of 200
+          for (let start = 0; start < total; start += BATCH_SIZE) {
+            const batch = targetIds.slice(start, start + BATCH_SIZE);
+
+            $stat.textContent = `Looting ${start + 1}-${
+              start + batch.length
+            }/${total}... (success: ${ok}, fail: ${fail})`;
+
+            const promises = batch.map(async (targetId) => {
               try {
                 const res = await lootMonster(targetId);
 
@@ -888,24 +912,31 @@ v2.2.2:
               }
             });
 
+            // Wait for this batch before starting the next
             await Promise.all(promises);
-            $stat.textContent = `Done. Looted ${ok}, failed ${fail}.`;
-            setRunning(false);
-            openBatchLootModal(
-              {
-                processed: `${ok + fail}/${targetIds.length}`,
-                success: ok,
-                fail,
-                exp: totalExp,
-                gold: totalGold,
-                dmg: totalDmg,
-              },
-              allItems,
-              allNotes
-            );
-          });
-        }
+          }
+
+          $stat.textContent = `Done. Looted ${ok}, failed ${fail}.`;
+          customBtn.classList.remove("is-running");
+          customBtn.textContent = "💰 Loot X monsters (super fast)";
+          btnLootX.classList.remove("is-running");
+          btnLootX.textContent = "💰 Loot X monsters (vanilla)";
+
+          openBatchLootModal(
+            {
+              processed: `${ok + fail}/${total}`,
+              success: ok,
+              fail,
+              exp: totalExp,
+              gold: totalGold,
+              dmg: totalDmg,
+            },
+            allItems,
+            allNotes
+          );
+        });
       }
+
       overrideLootX();
     }
 
@@ -1007,29 +1038,16 @@ v2.2.2:
       newBtn.addEventListener("click", async (e) => {
         console.log("[TM] Loot click intercepted");
         const n = Math.max(1, parseInt($input.value || "1", 10));
-        const eligibleEls = Array.from(
-          document.querySelectorAll('.monster-card[data-eligible="1"]')
-        ).filter((el) => {
-          const name = el.dataset.name?.toLowerCase().trim();
-          if (ignoreBossMobsWhenLooting) {
-            if (LOOTING_BLACKLIST_SET.has(name)) {
-              return false;
-            }
-          }
-          return true;
-        });
+        setRunning(true);
+        $stat.textContent = `Gathering ${n.toLocaleString()} mobs to loot...`;
 
-        const targetIds = eligibleEls
-          .slice(0, n)
-          .map((el) => parseInt(el.dataset.monsterId, 10))
-          .filter(Boolean);
+        const targetIds = await getLootableMobs(n);
 
         if (targetIds.length === 0) {
           $stat.textContent = "No eligible dead monsters you joined.";
           return;
         }
 
-        setRunning(true);
         let ok = 0,
           fail = 0;
         let totalExp = 0,
