@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.2.10
+// @version      2.3.0
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,7 +30,10 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- faster loot-x now batches looting by 200's (less failures)
+const PATCH_NOTES = `- Adds 1s cooldown between attacks for strategic attack.
+- Removes parallel joins option
+2.2.10
+- faster loot-x now batches looting by 200's (less failures)
 - Added responsive messages to loot-x for better bulk looting
 2.2.9:
 - disables gate info for better scrolling (can be re-enabled in wave page options)
@@ -575,14 +578,14 @@ v2.2.2:
     type: "checkbox",
     inputProps: { slider: true },
   });
-  const { container: useParallelJoinsToggle, input: useParallelJoinsInput } =
-    createSettingsInput({
-      key: "ui-improvements:useParallelJoins",
-      label: "Join Mobs in Parallel",
-      defaultValue: true,
-      type: "checkbox",
-      inputProps: { slider: true },
-    });
+  // const { container: useParallelJoinsToggle, input: useParallelJoinsInput } =
+  //   createSettingsInput({
+  //     key: "ui-improvements:useParallelJoins",
+  //     label: "Join Mobs in Parallel",
+  //     defaultValue: false,
+  //     type: "checkbox",
+  //     inputProps: { slider: true },
+  //   });
   const { container: enableLootXFasterToggle } = createSettingsInput({
     key: "ui-improvements:enableLootXFaster",
     label: "Faster Loot X",
@@ -631,16 +634,16 @@ v2.2.2:
     inputProps: { slider: true },
   });
 
-  let showUseParallelToggle = enableCustomAttackStrategyInput.checked;
-  useParallelJoinsToggle.style.display = showUseParallelToggle
-    ? "flex"
-    : "none";
+  // let showUseParallelToggle = enableCustomAttackStrategyInput.checked;
+  // useParallelJoinsToggle.style.display = showUseParallelToggle
+  //   ? "flex"
+  //   : "none";
 
   enableCustomAttackStrategyInput.addEventListener("change", () => {
-    showUseParallelToggle = enableCustomAttackStrategyInput.checked;
-    useParallelJoinsToggle.style.display = showUseParallelToggle
-      ? "flex"
-      : "none";
+    // showUseParallelToggle = enableCustomAttackStrategyInput.checked;
+    // useParallelJoinsToggle.style.display = showUseParallelToggle
+    //   ? "flex"
+    //   : "none";
   });
 
   const sortByHp = Storage.get("ui-improvements:sortByHp", false);
@@ -730,7 +733,7 @@ v2.2.2:
     "Settings related to the wave page.",
     [
       enableCustomAttackStrategyToggle,
-      useParallelJoinsToggle,
+      // useParallelJoinsToggle,
       enableInBattleCountToggle,
       enableLootXFasterToggle,
       flashHpBarWhenLowContainer,
@@ -1655,7 +1658,7 @@ v2.2.2:
       return { ok: n.ok, msg: n.msg, data: n.data, raw: n.raw };
     }
 
-    async function doAttack(monsterId, skillId, stam) {
+    async function doAttack(monsterId, skillId, stam, cooldown = 1000) {
       if (!ATTACK_URL) return { ok: false, msg: "Attack endpoint not set" };
 
       // ✅ damage.php expects POST monster_id + skill_id
@@ -1669,6 +1672,9 @@ v2.2.2:
       const n = normalizeOk(r);
       const msg =
         n.msg || (n.ok ? `Attacked (${stam})` : `Attack failed (${stam})`);
+      if (cooldown > 0) {
+        await sleep(cooldown);
+      }
       return { ok: n.ok, msg: n.msg, data: n.data, raw: n.raw };
     }
 
@@ -1716,20 +1722,20 @@ v2.2.2:
       modal.className = "attack-strat-modal";
 
       modal.innerHTML = `
-    <h3 class="attack-strat-title">🧠 Attack Strategy Builder</h3>
+          <h3 class="attack-strat-title">🧠 Attack Strategy Builder</h3>
 
-    <div id="skillPicker" class="attack-strat-picker"></div>
+          <div id="skillPicker" class="attack-strat-picker"></div>
 
-    <div class="attack-strat-label">Strategy order:</div>
+          <div class="attack-strat-label">Strategy order:</div>
 
-    <div id="strategyChips" class="attack-strat-chips"></div>
+          <div id="strategyChips" class="attack-strat-chips"></div>
 
-    <div id="strategyMeta" class="attack-strat-meta"></div>
+          <div id="strategyMeta" class="attack-strat-meta"></div>
 
-    <div class="attack-strat-footer">
-      <button class="btn attack-strat-close" id="attackStratClose">Close</button>
-    </div>
-  `;
+          <div class="attack-strat-footer">
+            <button class="btn attack-strat-close" id="attackStratClose">Close</button>
+          </div>
+        `;
 
       overlay.appendChild(modal);
       document.body.appendChild(overlay);
@@ -1755,10 +1761,10 @@ v2.2.2:
       let damageLimitValue = parseFloat(
         Storage.get("ui-improvements:damageLimitValue") || 0
       );
-      let useParallelJoins = Storage.get(
-        "ui-improvements:useParallelJoins",
-        true
-      );
+      // let useParallelJoins = Storage.get(
+      //   "ui-improvements:useParallelJoins",
+      //   true
+      // );
 
       // ---------- Helpers ----------
       function save() {
@@ -1768,8 +1774,8 @@ v2.2.2:
         Storage.set("ui-improvements:useDamageLimit", useDamageLimit);
         Storage.set("ui-improvements:damageLimitValue", damageLimitValue);
 
-        Storage.set("ui-improvements:useParallelJoins", useParallelJoins);
-        useParallelJoinsInput.checked = useParallelJoins;
+        // Storage.set("ui-improvements:useParallelJoins", useParallelJoins);
+        // useParallelJoinsInput.checked = useParallelJoins;
 
         // update the strategic attack button on the main page
         let newButtonString = `🧠 Quick Join & Attack (${getAttackStrategyCost(
@@ -1887,38 +1893,38 @@ v2.2.2:
         }
 
         // ----------  Parallel Joins Settings Checkbox ----------
-        let useParallelJoinsSettingsContainer = document.getElementById(
-          "useParallelJoinsSettingsContainer"
-        );
-        if (!useParallelJoinsSettingsContainer) {
-          useParallelJoinsSettingsContainer = document.createElement("div");
-          useParallelJoinsSettingsContainer.id =
-            "useParallelJoinsSettingsContainer";
-          useParallelJoinsSettingsContainer.className =
-            "parallel-joins-settings-container";
+        // let useParallelJoinsSettingsContainer = document.getElementById(
+        //   "useParallelJoinsSettingsContainer"
+        // );
+        // if (!useParallelJoinsSettingsContainer) {
+        //   useParallelJoinsSettingsContainer = document.createElement("div");
+        //   useParallelJoinsSettingsContainer.id =
+        //     "useParallelJoinsSettingsContainer";
+        //   useParallelJoinsSettingsContainer.className =
+        //     "parallel-joins-settings-container";
 
-          // Checkbox container
-          const checkbox = document.createElement("input");
-          checkbox.type = "checkbox";
-          checkbox.id = "parallelJoinsSettingCheckbox";
-          checkbox.checked = useParallelJoins;
-          checkbox.className = "attack-strat-checkbox";
+        //   // Checkbox container
+        //   const checkbox = document.createElement("input");
+        //   checkbox.type = "checkbox";
+        //   checkbox.id = "parallelJoinsSettingCheckbox";
+        //   checkbox.checked = useParallelJoins;
+        //   checkbox.className = "attack-strat-checkbox";
 
-          const label = document.createElement("label");
-          label.htmlFor = "parallelJoinsSettingCheckbox";
-          label.className = "attack-strat-label";
-          label.textContent = "Join monsters in parallel (faster)";
+        //   const label = document.createElement("label");
+        //   label.htmlFor = "parallelJoinsSettingCheckbox";
+        //   label.className = "attack-strat-label";
+        //   label.textContent = "Join monsters in parallel (faster)";
 
-          checkbox.addEventListener("change", () => {
-            useParallelJoins = checkbox.checked;
-            save();
-          });
+        //   checkbox.addEventListener("change", () => {
+        //     useParallelJoins = checkbox.checked;
+        //     save();
+        //   });
 
-          useParallelJoinsSettingsContainer.appendChild(checkbox);
-          useParallelJoinsSettingsContainer.appendChild(label);
+        //   useParallelJoinsSettingsContainer.appendChild(checkbox);
+        //   useParallelJoinsSettingsContainer.appendChild(label);
 
-          meta.appendChild(useParallelJoinsSettingsContainer);
-        }
+        //   meta.appendChild(useParallelJoinsSettingsContainer);
+        // }
       }
 
       function renderStrategy() {
@@ -2101,10 +2107,10 @@ v2.2.2:
 
         strategyAttackBtn.addEventListener("click", async () => {
           const ids = getSelectedMonsterIds();
-          const useParallelJoins = Storage.get(
-            "ui-improvements:useParallelJoins",
-            true
-          );
+          // const useParallelJoins = Storage.get(
+          //   "ui-improvements:useParallelJoins",
+          //   true
+          // );
           if (!ids.length) {
             showStatus("Select at least 1 monster.");
             return;
@@ -2171,16 +2177,16 @@ v2.2.2:
             };
           };
 
-          if (useParallelJoins) {
-            // ⚡ PARALLEL
-            const tasks = ids.map((id, i) => runTask(id, i));
-            results.push(...(await Promise.all(tasks)));
-          } else {
-            // 🐢 SEQUENTIAL
-            for (let i = 0; i < ids.length; i++) {
-              results.push(await runTask(ids[i], i));
-            }
+          // if (useParallelJoins) {
+          //   // ⚡ PARALLEL
+          //   const tasks = ids.map((id, i) => runTask(id, i));
+          //   results.push(...(await Promise.all(tasks)));
+          // } else {
+          // 🐢 SEQUENTIAL
+          for (let i = 0; i < ids.length; i++) {
+            results.push(await runTask(ids[i], i));
           }
+          // }
 
           showStatus("Strategy complete.");
           setQuickBtnsRunning(false);
