@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Veyra Hud Core
 // @namespace    http://tampermonkey.net/
-// @version      2.0.8
+// @version      2.0.9
 // @description  Core functionality for veyra-hud
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
@@ -275,9 +275,11 @@ function pageAlert(message, options = {}) {
     color: #fff;
     min-width: 280px;
     max-width: 90%;
+    max-height: 80%;
     padding: 16px;
     border-radius: 10px;
     box-shadow: 0 20px 50px rgba(0,0,0,.5);
+    overflow: auto;
   `;
 
   // Title
