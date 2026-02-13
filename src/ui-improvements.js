@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.3.0
+// @version      2.3.1
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,29 +30,43 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- Adds 1s cooldown between attacks for strategic attack.
+const PATCH_NOTES = `- Moves the auto farm control buttons out of the hidden section
+- Removes lunar plague event link
+- moves event link to bottom of menu
+
+2.3.1:
+- Adds 1s cooldown between attacks for strategic attack.
 - Removes parallel joins option
-2.2.10
+
+2.2.10:
 - faster loot-x now batches looting by 200's (less failures)
 - Added responsive messages to loot-x for better bulk looting
+
 2.2.9:
 - disables gate info for better scrolling (can be re-enabled in wave page options)
+
 2.2.8:
 - Unlocks the select visible limit on multi attack
 - Removed duplicate navigation link to Adventurer's Guild
+
 2.2.7:
 - Adds heal button next to health bar on wave page.
+
 2.2.6:
 - Adds a link in navigation menu to open settings (some browsers had issues with the regular button)
+
 2.2.5
 - Added Asterion stamina calculations to attack buttons on battle page (Global Settings => Better Attack Buttons).
 - Asterion multiplier support added to battle page (Global Settings => Use Asterion | Asterion Multiplier)
 - Asterion multiplier updates when on Pets Inventory
 - Styling of text inputs in settings drawer
+
 v2.2.4:
 - Added menu link to Lunar Plague event
+
 v2.2.3: 
 - vanilla loot-x button now ignores boss corpses (if set)
+
 v2.2.2:
 - fixed dungeon loot error when exp, gold or damage is zero
 - fixed padding at the bottom of the battle-consumables (iOS)`;
@@ -287,10 +301,11 @@ v2.2.2:
     // Find the event link by its label
     const eventLink = [...document.querySelectorAll(".side-nav-item")].find(
       (el) =>
-        el.querySelector(".side-label")?.textContent.trim() === "New Year Event"
+        el.querySelector(".side-label")?.textContent.trim() ===
+        "Lunar Year Event"
     );
 
-    // Move New Year Event link to the bottom of the menu
+    // Move event link to the bottom of the menu
     if (eventLink) {
       addMenuLinkAfter(
         "Battle Pass",
@@ -361,7 +376,7 @@ v2.2.2:
         }
       });
 
-      addMenuLinkAfter("Home", "/lunar_plague.php", "Lunar Plague Event", "☣️");
+      // addMenuLinkAfter("Home", "/lunar_plague.php", "Lunar Plague Event", "☣️");
 
       addMenuLinkAfter("Guild", "/guild_dungeon.php", "Guild Dungeons", "🕳️");
     }
@@ -2390,6 +2405,46 @@ v2.2.2:
       }
     }
     // -------------- Gate Info Scroll Removal ---------------- //
+
+    // --------- Move Auto Farmer Action Buttons -------------- //
+
+    const btnStyle = `
+      background: #333;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      color: #fff;
+      cursor: pointer;
+      border: 1px solid #2b2d44;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, .6);
+    `;
+
+    const toggleBtn = document.getElementById("afToggleBtn");
+    const startBtn = document.getElementById("afStartBtn");
+    const pauseBtn = document.getElementById("afPauseBtn");
+    const resetBtn = document.getElementById("afResetBtn");
+
+    const headerActions = toggleBtn?.parentElement;
+
+    if (headerActions) {
+      if (startBtn) {
+        startBtn.style.cssText = btnStyle;
+        startBtn.className = "";
+        headerActions.insertBefore(startBtn, toggleBtn);
+      }
+      if (pauseBtn) {
+        pauseBtn.style.cssText = btnStyle;
+        pauseBtn.className = "";
+        headerActions.insertBefore(pauseBtn, toggleBtn);
+      }
+      if (resetBtn) {
+        resetBtn.style.cssText = btnStyle;
+        resetBtn.className = "";
+        headerActions.insertBefore(resetBtn, toggleBtn);
+      }
+    }
+    // --------- Move Auto Farmer Action Buttons -------------- //
   }
   // -------------------------- Wave X Page ---------------------------- //
 
