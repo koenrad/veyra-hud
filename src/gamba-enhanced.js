@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Gamba is My Way (enhanced)
 // @namespace    https://papa-zeus-777.net
-// @version      1.0.2
+// @version      1.0.3
 // @description  Papa Zeus 777 MAX WIN, Dare to TRY????
 // @author       Papa ZEUS - enhanced by [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/gamba-enhanced.js
 // @downloadURL  https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/gamba-enhanced.js
-// @match        https://demonicscans.org/lunar_plague.php
+// @match        https://demonicscans.org/event_page.php?event=7
 // @grant        none
 // ==/UserScript==
 
@@ -92,8 +92,8 @@
 
   gamba.addEventListener("click", async () => {
     // Get current values from input fields
-    const eventId = 6;
-    const machineId = 3;
+    const eventId = 7;
+    const machineId = 4;
     const totalPull = parseInt(wrapper.querySelector("#gambaPull").value) || 1;
 
     // Clear previous results
