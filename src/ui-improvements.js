@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.3.1
+// @version      2.3.2
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,7 +30,11 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- Moves the auto farm control buttons out of the hidden section
+const PATCH_NOTES = `- Adds join button on boss spawn notifications
+- Adds Emberfall Event link to navigation
+
+2.3.2:
+- Moves the auto farm control buttons out of the hidden section
 - Removes lunar plague event link
 - moves event link to bottom of menu
 
@@ -376,9 +380,16 @@ v2.2.2:
         }
       });
 
-      // addMenuLinkAfter("Home", "/lunar_plague.php", "Lunar Plague Event", "☣️");
-
       addMenuLinkAfter("Guild", "/guild_dungeon.php", "Guild Dungeons", "🕳️");
+
+      // EVENT LINK
+      // addMenuLinkAfter("Home", "/lunar_plague.php", "Lunar Plague Event", "☣️");
+      addMenuLinkAfter(
+        "Home",
+        "/event_page.php?event=7",
+        "Emberfall Event",
+        "🍂"
+      );
     }
   }
   // -------------------- Menu Sidebar / Navigation -------------------- //
@@ -2445,6 +2456,48 @@ v2.2.2:
       }
     }
     // --------- Move Auto Farmer Action Buttons -------------- //
+
+    // ------------ Add Join Buttons For Bosses --------------- //
+    const autoSummonCards = document.querySelectorAll(
+      '.auto-summon-card[data-alive="1"]'
+    );
+
+    autoSummonCards.forEach((card) => {
+      const nameEl = card.querySelector(".auto-summon-name");
+      if (!nameEl) return;
+
+      const monsterName = nameEl.textContent.trim().toLowerCase();
+
+      // Find matching monster card by data-name
+      const monsterCard = document.querySelector(
+        `.monster-card[data-name="${monsterName}"]`
+      );
+
+      if (!monsterCard) return;
+
+      const monsterId = monsterCard.dataset.monsterId;
+      if (!monsterId) return;
+
+      const statusEl = card.querySelector(".auto-summon-status.alive");
+      if (!statusEl) return;
+
+      // Prevent duplicate buttons
+      if (statusEl.querySelector(".auto-join-btn")) return;
+
+      // Create Join button
+      const joinBtn = document.createElement("a");
+      joinBtn.className = "auto-join-btn join-btn";
+      joinBtn.href = `battle.php?id=${monsterId}`;
+      joinBtn.textContent = "Join";
+      joinBtn.style.marginLeft = "10px";
+      joinBtn.style.marginTop = "0px";
+      joinBtn.style.textDecoration = "none";
+      joinBtn.style.padding = "3px 15px";
+      joinBtn.style.background = "#1a9d73";
+
+      statusEl.appendChild(joinBtn);
+    });
+    // ------------ Add Join Buttons For Bosses --------------- //
   }
   // -------------------------- Wave X Page ---------------------------- //
 
@@ -3110,13 +3163,17 @@ v2.2.2:
     params.set("instance_id", String(instanceId));
 
     const lootUrl = instanceId === "0" ? "loot.php" : "dungeon_loot.php";
+    const referrer =
+      instanceId === "0"
+        ? `https://demonicscans.org/battle.php?id=${monsterId}`
+        : `https://demonicscans.org/battle.php?dgmid=${monsterId}`;
 
     const res = await fetch(lootUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      referrer: `https://demonicscans.org/battle.php?dgmid=${monsterId}`,
+      referrer,
       body: params.toString(),
     });
 
