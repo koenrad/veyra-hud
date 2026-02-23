@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.3.2
+// @version      2.3.3
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,7 +30,10 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- Adds join button on boss spawn notifications
+const PATCH_NOTES = `- Adds Wilderness Zone 1 to navigation
+
+2.3.2
+- Adds join button on boss spawn notifications
 - Adds Emberfall Event link to navigation
 
 2.3.2:
@@ -384,11 +387,12 @@ v2.2.2:
 
       // EVENT LINK
       // addMenuLinkAfter("Home", "/lunar_plague.php", "Lunar Plague Event", "☣️");
+      addMenuLinkAfter("Home", "/event_page.php?event=7", "Emberfall", "🍂");
       addMenuLinkAfter(
-        "Home",
+        "Emberfall",
         "/event_page.php?event=7",
-        "Emberfall Event",
-        "🍂"
+        "Wilderness Z1",
+        "🌿"
       );
     }
   }
