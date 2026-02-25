@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.3.4
+// @version      2.3.5
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,12 +30,15 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- fixed wilderness zone 1 link (oops)
+const PATCH_NOTES = `- Optimized wait time between attacks to account for response time. Should be 15-40% faster between strategic attacks depending on network speed
 
-2.3.3
+2.3.4:
+- fixed wilderness zone 1 link (oops)
+
+2.3.3:
 - Adds Wilderness Zone 1 to navigation
 
-2.3.2
+2.3.2:
 - Adds join button on boss spawn notifications
 - Adds Emberfall Event link to navigation
 
@@ -1603,7 +1606,11 @@ v2.2.2:
       };
     }
 
-    async function performAttackStrat(monsterId, attackStrat) {
+    async function performAttackStrat(
+      monsterId,
+      attackStrat,
+      startJoinTime = performance.now()
+    ) {
       const useDamageLimit = Storage.get(
         "ui-improvements:useDamageLimit",
         false
@@ -1635,6 +1642,8 @@ v2.2.2:
         }
 
         try {
+          const startAttackTime =
+            results.length === 0 ? startJoinTime : performance.now();
           const res = await doAttack(
             monsterId,
             parseInt(skill.id, 10),
@@ -1653,6 +1662,17 @@ v2.2.2:
           totalDamage += damage;
 
           results.push(buildResult(skillName, !!res.ok, msg, damage));
+
+          const ATTACK_COOLDOWN = 1000;
+
+          if (ATTACK_COOLDOWN) {
+            const endAttackTime = performance.now();
+            const cd = ATTACK_COOLDOWN - (endAttackTime - startAttackTime);
+            if (cd > 0) {
+              console.log(`waiting for cooldown ${cd}ms on ${monsterId}`);
+              await sleep(cd);
+            }
+          }
 
           if (!res.ok) break; // stop strategy on failure
         } catch {
@@ -1691,7 +1711,7 @@ v2.2.2:
       return { ok: n.ok, msg: n.msg, data: n.data, raw: n.raw };
     }
 
-    async function doAttack(monsterId, skillId, stam, cooldown = 1000) {
+    async function doAttack(monsterId, skillId, stam) {
       if (!ATTACK_URL) return { ok: false, msg: "Attack endpoint not set" };
 
       // ✅ damage.php expects POST monster_id + skill_id
@@ -1705,9 +1725,9 @@ v2.2.2:
       const n = normalizeOk(r);
       const msg =
         n.msg || (n.ok ? `Attacked (${stam})` : `Attack failed (${stam})`);
-      if (cooldown > 0) {
-        await sleep(cooldown);
-      }
+      // if (cooldown > 0) {
+      //   await sleep(cooldown);
+      // }
       return { ok: n.ok, msg: n.msg, data: n.data, raw: n.raw };
     }
 
@@ -2170,7 +2190,7 @@ v2.2.2:
 
             const alreadyJoined = card && card.dataset.joined === "1";
             let joinRes = { ok: true, msg: "" };
-
+            const startJoinTime = performance.now();
             if (!alreadyJoined) {
               try {
                 joinRes = await doJoin(id);
@@ -2195,7 +2215,11 @@ v2.2.2:
               }
             }
 
-            const atkResults = await performAttackStrat(id, attackStrategy);
+            const atkResults = await performAttackStrat(
+              id,
+              attackStrategy,
+              startJoinTime
+            );
 
             const resultsEl = document.createElement("div");
             for (const result of atkResults) {
