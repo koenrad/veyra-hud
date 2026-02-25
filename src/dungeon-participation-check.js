@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dungeon Participation Check
 // @namespace    http://tampermonkey.net/
-// @version      1.0.2
+// @version      1.0.3
 // @description  Dungeon participation report
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/dungeon-participation-check.js
@@ -21,7 +21,7 @@
   const MONSTER_CONFIG = Object.freeze({
     // Winter Event
     "Rukka The Wolf Raider": {
-      imposed_damage_limit: 12_000_000,
+      imposed_damage_limit: 13_000_000,
       exp_cap: 10_000_000,
       exp_per_damage: 0.014,
       max_hp: 50_000_000,
@@ -39,13 +39,13 @@
       max_hp: 15_000_000,
     },
     "Gorvash the Stone-Ram": {
-      imposed_damage_limit: 0,
+      imposed_damage_limit: 13_000_000,
       exp_cap: 20_000_000,
       exp_per_damage: 0.009,
       max_hp: 100_000_000,
     },
     "Gribble Junk-Magus": {
-      imposed_damage_limit: 2_000_000,
+      imposed_damage_limit: 3_000_000,
       exp_cap: 20_000_000,
       exp_per_damage: 0.004,
       max_hp: 100_000_000,
@@ -63,7 +63,7 @@
       max_hp: 35_000_000,
     },
     "Talla Flint-Stem": {
-      imposed_damage_limit: 4_900_000,
+      imposed_damage_limit: 6_000_000,
       exp_cap: 5_000_000,
       exp_per_damage: 0.008,
       max_hp: 25_000_000,
@@ -75,7 +75,7 @@
       max_hp: 35_000_000,
     },
     "Droknar Night-Blade": {
-      imposed_damage_limit: 0,
+      imposed_damage_limit: 7_000_000,
       exp_cap: 5_000_000,
       exp_per_damage: 0.012,
       max_hp: 25_000_000,
@@ -117,7 +117,7 @@
       max_hp: 35_000_000,
     },
     "Nib Wickfingers": {
-      imposed_damage_limit: 0,
+      imposed_damage_limit: 7_000_000,
       exp_cap: 4_000_000,
       exp_per_damage: 0.008,
       max_hp: 20_000_000,
