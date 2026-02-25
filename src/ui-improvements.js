@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.3.5
+// @version      2.3.6
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,7 +30,11 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- Optimized wait time between attacks to account for response time. Should be 15-40% faster between strategic attacks depending on network speed
+const PATCH_NOTES = `- Made delay between strategic attacks configurable (Wave Page section). default: 1050 miliseconds (just over 1 second)
+- If you get "Slow down..." while using strategic attacks try increasing it by ~100 at a time.
+
+2.3.5:
+- Optimized wait time between attacks to account for response time. Should be 15-40% faster between strategic attacks depending on network speed
 
 2.3.4:
 - fixed wilderness zone 1 link (oops)
@@ -697,6 +701,10 @@ v2.2.2:
     "ui-improvements:disableGateInfoToggle",
     true
   );
+  const ATTACK_COOLDOWN = Storage.get(
+    "ui-improvements:strategicAttackWaitBuffer",
+    1050
+  );
 
   const { container: sortMobsByHpInSettingsToggle } = createSettingsInput({
     key: "ui-improvements:sortByHp",
@@ -750,6 +758,18 @@ v2.2.2:
     },
   });
 
+  const { container: strategicAttackWaitBufferContainer } = createSettingsInput(
+    {
+      key: "ui-improvements:strategicAttackWaitBuffer",
+      label: "Minimum Delay Between Strategic Attacks (ms)",
+      defaultValue: 1000,
+      type: "number",
+      inputProps: {
+        style: { width: "100px" },
+      },
+    }
+  );
+
   addSettingsGroup(
     "wave-filtering",
     "Wave Filtering",
@@ -769,6 +789,7 @@ v2.2.2:
     "Settings related to the wave page.",
     [
       enableCustomAttackStrategyToggle,
+      strategicAttackWaitBufferContainer,
       // useParallelJoinsToggle,
       enableInBattleCountToggle,
       enableLootXFasterToggle,
@@ -1662,8 +1683,6 @@ v2.2.2:
           totalDamage += damage;
 
           results.push(buildResult(skillName, !!res.ok, msg, damage));
-
-          const ATTACK_COOLDOWN = 1000;
 
           if (ATTACK_COOLDOWN) {
             const endAttackTime = performance.now();
