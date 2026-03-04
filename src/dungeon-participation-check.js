@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Dungeon Participation Check
 // @namespace    http://tampermonkey.net/
-// @version      1.0.3
+// @version      1.1.0
 // @description  Dungeon participation report
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/dungeon-participation-check.js
@@ -143,6 +143,7 @@
   async function injectGenerateReportButton(id) {
     // Create the new button element
     const newBtn = document.createElement("div");
+    const exportBtn = document.createElement("div");
     newBtn.className = "btn report-btn";
     newBtn.textContent = "✨ Generate Report"; // button label
 
@@ -155,12 +156,30 @@
       await generateReport(id);
       newBtn.textContent = "✨ Generate Report";
       newBtn.removeAttribute("disabled");
+      exportBtn.removeAttribute("disabled");
+    });
+
+    exportBtn.className = "btn export-btn";
+    exportBtn.textContent = "✨ Export Report"; // button label
+    if (!REPORTS[id]) {
+      exportBtn.setAttribute("disabled", true);
+    }
+
+    // Add a click handler
+    exportBtn.addEventListener("click", async () => {
+      console.log("exporting report...");
+      exportBtn.textContent = "✨ Exporting Report...";
+      exportBtn.setAttribute("disabled", true);
+      await downloadSummarizedCsv(id);
+      exportBtn.textContent = "✨ Export Report";
+      exportBtn.removeAttribute("disabled");
     });
 
     // Find the row containing the Back and Info buttons
     const row = document.querySelector(".row > .row");
 
     // Insert the new button between the first (Back) and second (Info)
+    row.insertBefore(exportBtn, row.children[1]);
     row.insertBefore(newBtn, row.children[1]);
   }
 
@@ -301,6 +320,87 @@
       };
     });
     return data;
+  }
+
+  function downloadCsv(rows, filename) {
+    const csvContent = rows.map((row) => row.join(",")).join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function escapeCsv(value) {
+    if (value == null) return "";
+    const str = String(value);
+    if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  }
+
+  function downloadSummarizedCsv(
+    instanceId,
+    filename = "instance_summary.csv"
+  ) {
+    const players =
+      Storage.get("dungeon-participation-check:reports", {})[instanceId] ?? [];
+    const rows = [];
+
+    // Header
+    rows.push([
+      "pid",
+      "name",
+      "totalDamage",
+      "totalExp",
+      "monstersDamaged",
+      "damageOverExpCap",
+      "totalOverLimitMonsters",
+      "totalOverLimitDamage",
+    ]);
+
+    players.forEach((player) => {
+      const {
+        pid,
+        name,
+        totalDamage,
+        totalExp,
+        monstersDamaged,
+        damageOverExpCap,
+        monstersOverImposedLimit,
+      } = player;
+
+      const overLimitCount = monstersOverImposedLimit?.length || 0;
+
+      const overLimitDamage = (monstersOverImposedLimit || []).reduce(
+        (sum, m) => {
+          const excess = m.damage - m.imposed_damage_limit;
+          return sum + (excess > 0 ? excess : 0);
+        },
+        0
+      );
+
+      rows.push([
+        pid,
+        escapeCsv(name),
+        totalDamage,
+        totalExp,
+        monstersDamaged,
+        damageOverExpCap,
+        overLimitCount,
+        overLimitDamage,
+      ]);
+    });
+
+    downloadCsv(rows, filename);
   }
 
   (async function main() {
