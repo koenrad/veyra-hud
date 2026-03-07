@@ -1640,8 +1640,13 @@ v2.2.2:
         Storage.get("ui-improvements:damageLimitValue") || 0
       );
 
+      const monsterCard = document.querySelector(`.monster-card[data-monster-id="${monsterId}"]`);
+      const dmgEl = monsterCard.querySelector('span[title="Your damage dealt"]');
+      const damage = dmgEl ? parseInt(dmgEl.textContent.replace(/[^\d]/g, ''), 10) : 0;
+
+
       const results = [];
-      let totalDamage = 0;
+      let totalDamage = damage;
 
       for (const skillName of attackStrat) {
         const skill = Skills[skillName.toLowerCase()];
