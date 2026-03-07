@@ -1739,7 +1739,6 @@ v2.2.2:
       const n = normalizeOk(r);
       return { ok: n.ok, msg: n.msg, data: n.data, raw: n.raw };
     }
-
     async function doAttack(monsterId, skillId, stam) {
       if (!ATTACK_URL) return { ok: false, msg: "Attack endpoint not set" };
 
@@ -1752,12 +1751,42 @@ v2.2.2:
 
       const r = await postForm(ATTACK_URL, payload);
       const n = normalizeOk(r);
+      updateMonsterDamage(r.data,monsterId);
       const msg =
         n.msg || (n.ok ? `Attacked (${stam})` : `Attack failed (${stam})`);
       // if (cooldown > 0) {
       //   await sleep(cooldown);
       // }
       return { ok: n.ok, msg: n.msg, data: n.data, raw: n.raw };
+    }
+    async function updateMonsterDamage(atkRes,id){
+      if (atkRes.status != "success") return;
+
+      const monsterCard = document.querySelector(`.monster-card[data-monster-id="${id}"]`);
+      if (!monsterCard) return;
+
+      let dmgSpan = monsterCard.querySelector('span[title="Your damage dealt"]');
+      if (!dmgSpan) {
+        const container = monsterCard.querySelector('label.pickWrap')?.parentElement;
+        dmgSpan = document.createElement('span');
+        dmgSpan.className = 'mini-chip party-chip';
+        dmgSpan.title = 'Your damage dealt';
+        container.appendChild(dmgSpan);
+      }
+
+      dmgSpan.innerHTML = `🩸 You: ${atkRes.totaldmgdealt.toLocaleString()}`;
+
+      const hpValueElem = monsterCard.querySelector('.stat-row:nth-child(1) .stat-value');
+      if (hpValueElem) {
+        hpValueElem.innerHTML = `${atkRes.hp.value.toLocaleString()} / ${atkRes.hp.max.toLocaleString()}`;
+      }
+
+      const hpFill = monsterCard.querySelector('.hp-fill');
+      if (hpFill) {
+        const percent = (atkRes.hp.value / atkRes.hp.max) * 100;
+        hpFill.style.width = `${percent}%`;
+      }
+
     }
 
     async function postForm(url, payload) {
