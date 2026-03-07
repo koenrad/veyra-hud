@@ -1690,7 +1690,7 @@ v2.2.2:
           const match = msg.match(/<strong>([\d,]+)<\/strong>/);
           const damage = match ? Number(match[1].replace(/,/g, "")) : 0;
 
-          totalDamage += damage;
+          totalDamage = res.data.totaldmgdealt;
 
           results.push(buildResult(skillName, !!res.ok, msg, damage));
 
