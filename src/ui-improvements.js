@@ -835,8 +835,10 @@ v2.2.2:
       const els = Array.from(
         doc.querySelectorAll('.monster-card[data-eligible="1"]')
       );
+
       return els
         .filter((el) => {
+          if (el.style.display === 'none') return false;
           const name = el.dataset.name?.toLowerCase().trim();
           if (ignoreBossMobsWhenLooting) {
             if (LOOTING_BLACKLIST_SET.has(name)) {
@@ -3342,3 +3344,57 @@ v2.2.2:
 
   // ------------------------- Dungeon Loot All ------------------------ //
 })();
+const nameSel = document.getElementById('fNameSel');
+function buildMonsterNameOptions(){
+    if (!nameSel) return;
+
+    // Collect unique names from ALIVE monster cards (QOL ignores dead anyway)
+    const seen = new Map(); // lower -> display
+    document.querySelectorAll('.monster-card').forEach(card => {
+        const lower = (card.dataset.name || '').trim(); // you already store lowercase in data-name
+        if (!lower) return;
+        // Use the visible title as display text (keeps case/spaces)
+        const h3 = card.querySelector('h3');
+        const display = (h3 && h3.textContent) ? h3.textContent.trim() : lower;
+        if (!seen.has(lower)) seen.set(lower, display);
+    });
+
+    // Preserve current selection
+    const current = nameSel.value || '';
+
+    // Reset options (keep "All monsters")
+    nameSel.innerHTML = `<option value="">All monsters</option>`;
+
+    // Sort by display text
+    const arr = Array.from(seen.entries()).sort((a,b) => a[1].localeCompare(b[1]));
+    for (const [lower, display] of arr){
+        const opt = document.createElement('option');
+        opt.value = lower; // match card.dataset.name (lowercase)
+        opt.textContent = display; // pretty label
+        nameSel.appendChild(opt);
+    }
+
+    // Restore selection if still exists
+    if (current && seen.has(current)) nameSel.value = current;
+}
+function applyFilters(){
+    const selected = (nameSel?.value || '').trim(); // lowercase or ''
+
+    document.querySelectorAll('.monster-card').forEach(card => {
+
+        const nmLower = (card.dataset.name || '').trim(); // already lowercase
+        const isJoined = card.dataset.joined === '1';
+
+        const okName = !selected || nmLower === selected; // exact match by dropdown
+
+        card.style.display = (okName ) ? '' : 'none';
+    });
+}
+[nameSel].forEach(el => {
+    if (!el) return;
+    el.addEventListener('change', applyFilters);
+    el.addEventListener('input', applyFilters);
+});
+
+buildMonsterNameOptions();
+applyFilters();
