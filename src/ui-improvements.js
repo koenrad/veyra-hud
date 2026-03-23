@@ -3421,7 +3421,7 @@ v2.2.2:
             lootBtn.textContent = "💰 Loot Monsters";
             lootBtn.removeAttribute("disabled");
         });
-        if(window.location.pathname.includes('guild_dungeon_location.php')){
+        if(window.location.pathname.includes('guild_dungeon_instance.php')){
             const row = document.querySelector(".row > .row");
             row.insertBefore(lootBtn, row.children[2]);
         }else if(window.location.pathname.includes('guild_dungeon_cube.php')){
