@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.3.7
+// @version      2.3.8
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,7 +30,9 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- Added button "Go To Battle #monsterid" on the strategic attack resuts (new tab). This is useful to go to a monster that was skipped due to attacking too fast.
+const PATCH_NOTES = `- accidentally removed decraft altar, added it back
+
+3.5.7:- Added button "Go To Battle #monsterid" on the strategic attack resuts (new tab). This is useful to go to a monster that was skipped due to attacking too fast.
 - Removed extra emberfall links, moves vanilla link to bottom
 - Added link to Shadow Army below Inventory.
 - Added the vanilla active highlighting to custom menu items
@@ -378,12 +380,12 @@ v2.2.2:
         "🔥"
       );
 
-      // addMenuLinkAfter(
-      //   "Power Crystals",
-      //   "/legendary_decraft.php",
-      //   "Decraft Altar",
-      //   "🛕"
-      // );
+      addMenuLinkAfter(
+        "Legendary Forge",
+        "/legendary_decraft.php",
+        "Decraft Altar",
+        "🛕"
+      );
 
       addMenuLinkAfter(
         "Battle Pass",
