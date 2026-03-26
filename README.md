@@ -3,6 +3,10 @@
 UI enhancements and helper scripts to make interacting with **Veyra** smoother, faster, and more convenient.  
 This project is designed to run as a **userscript** through Tampermonkey, making installation simple.
 
+## IMPORTANT KNOWN BUG
+
+The settings will not be accessible without having at least one equipent preset. Go to inventory and create a vanilla preset, and the settings will appear correctly.
+
 ---
 
 ## 🚀 What is veyra-hud?
