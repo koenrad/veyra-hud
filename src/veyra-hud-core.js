@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Veyra Hud Core
 // @namespace    http://tampermonkey.net/
-// @version      2.0.9
+// @version      2.0.10
 // @description  Core functionality for veyra-hud
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
@@ -12,6 +12,17 @@
 // ==/UserScript==
 
 const VHC_USER_ID = await getUserId();
+
+const getUsername = async (doc = document) => {
+  let username = doc.querySelector(".small-name")?.textContent.trim();
+  if (!username) {
+    const gameDash = await internalFetch(
+      "https://demonicscans.org/game_dash.php"
+    );
+    username = gameDash.querySelector(".small-name")?.textContent.trim() || "";
+  }
+  return username;
+};
 
 let settingsDrawer = {};
 
