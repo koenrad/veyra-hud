@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.3.6
+// @version      2.3.7
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,7 +30,13 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- Made delay between strategic attacks configurable (Wave Page section). default: 1050 miliseconds (just over 1 second)
+const PATCH_NOTES = `- Added button "Go To Battle #monsterid" on the strategic attack resuts (new tab). This is useful to go to a monster that was skipped due to attacking too fast.
+- Removed extra emberfall links, moves vanilla link to bottom
+- Added link to Shadow Army below Inventory.
+- Added the vanilla active highlighting to custom menu items
+
+3.5.6:
+- Made delay between strategic attacks configurable (Wave Page section). default: 1050 miliseconds (just over 1 second)
 - If you get "Slow down..." while using strategic attacks try increasing it by ~100 at a time.
 
 2.3.5:
@@ -196,6 +202,11 @@ v2.2.2:
     newLink.classList.add("side-nav-item");
     newLink.href = newUrl;
 
+    const pathname = window.location.pathname;
+    if (pathname.includes(newUrl)) {
+      newLink.classList.add("active");
+    }
+
     newLink.innerHTML = `
       <span class="side-icon">${newIcon}</span>
       <span class="side-label">${newTitle}</span>
@@ -319,7 +330,7 @@ v2.2.2:
     const eventLink = [...document.querySelectorAll(".side-nav-item")].find(
       (el) =>
         el.querySelector(".side-label")?.textContent.trim() ===
-        "Lunar Year Event"
+        "Emberfall Event"
     );
 
     // Move event link to the bottom of the menu
@@ -367,12 +378,12 @@ v2.2.2:
         "🔥"
       );
 
-      addMenuLinkAfter(
-        "Legendary Forge",
-        "/legendary_decraft.php",
-        "Decraft Altar",
-        "🛕"
-      );
+      // addMenuLinkAfter(
+      //   "Power Crystals",
+      //   "/legendary_decraft.php",
+      //   "Decraft Altar",
+      //   "🛕"
+      // );
 
       addMenuLinkAfter(
         "Battle Pass",
@@ -380,6 +391,8 @@ v2.2.2:
         "Weekly Leaderboard",
         "🏆"
       );
+
+      addMenuLinkAfter("Inventory", "/shadow_army.php", "Shadow Army", "☠");
 
       const settingsTrigger = addMenuLinkAfter(
         "Weekly Leaderboard",
@@ -397,13 +410,13 @@ v2.2.2:
 
       // EVENT LINK
       // addMenuLinkAfter("Home", "/lunar_plague.php", "Lunar Plague Event", "☣️");
-      addMenuLinkAfter("Home", "/event_page.php?event=7", "Emberfall", "🍂");
-      addMenuLinkAfter(
-        "Emberfall",
-        "active_wave.php?event=7&wave=4",
-        "Wilderness Z1",
-        "🌿"
-      );
+      // addMenuLinkAfter("Home", "/event_page.php?event=7", "Emberfall", "🍂");
+      // addMenuLinkAfter(
+      //   "Emberfall",
+      //   "active_wave.php?event=7&wave=4",
+      //   "Wilderness Z1",
+      //   "🌿"
+      // );
     }
   }
   // -------------------- Menu Sidebar / Navigation -------------------- //
@@ -1569,13 +1582,30 @@ v2.2.2:
           const monster = document.createElement("div");
           monster.style.fontWeight = "700";
           monster.style.color = "#e6e9ff";
-          monster.textContent = `#${r.monsterId ?? "?"}`;
+
+          const link = document.createElement("a");
+          link.href = `https://demonicscans.org/battle.php?id=${r.monsterId}`;
+          link.textContent = `Go to Battle #${r.monsterId}`;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+
+          Object.assign(link.style, {
+            display: "inline-block",
+            padding: "4px 8px",
+            background: "rgb(26, 157, 115)",
+            color: "white",
+            textDecoration: "none",
+            borderRadius: "6px",
+            fontWeight: "bold",
+            cursor: "pointer",
+          });
 
           const status = document.createElement("div");
           status.style.fontWeight = "800";
           status.style.color = color;
           status.textContent = r.ok ? "✅ OK" : "❌ FAIL";
 
+          monster.appendChild(link);
           header.append(monster, status);
 
           // Message container
