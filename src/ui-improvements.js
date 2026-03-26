@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.3.8
+// @version      2.4.0
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,9 +30,13 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- accidentally removed decraft altar, added it back
+const PATCH_NOTES = `- Added "Loot All" button to the cube dungeon. Uses same settings to stop looting on level up.
 
-3.5.7:- Added button "Go To Battle #monsterid" on the strategic attack resuts (new tab). This is useful to go to a monster that was skipped due to attacking too fast.
+3.5.8:
+- accidentally removed decraft altar, added it back
+
+3.5.7:
+- Added button "Go To Battle #monsterid" on the strategic attack resuts (new tab). This is useful to go to a monster that was skipped due to attacking too fast.
 - Removed extra emberfall links, moves vanilla link to bottom
 - Added link to Shadow Army below Inventory.
 - Added the vanilla active highlighting to custom menu items
@@ -3329,4 +3333,108 @@ v2.2.2:
   })();
 
   // ------------------------- Dungeon Loot All ------------------------ //
+
+  // ------------------------- Cube Dungeon Loot All ------------------------ //
+
+  async function lootAllCubeMonsters(instanceId, stopIfLevelUp = true) {
+    const locations = STATE.nodes
+      .filter((node) => node.is_revealed && node.linked_location_id !== 0)
+      .map((node) => node.linked_location_id);
+    let mobsToLoot = [];
+    const expToLevel = getRequiredExperienceToLevel();
+    for (const location of locations) {
+      const locationPage = await internalFetch(
+        `/guild_dungeon_location.php?instance_id=${instanceId}&location_id=${location}`
+      );
+      const unlootedMobs = getUnootedMobs(locationPage);
+      mobsToLoot.push(...unlootedMobs);
+    }
+
+    console.log(`Looting ${mobsToLoot.length} monsters...`);
+    const allLootData = {
+      leveledUp: false,
+      numMobsToLoot: mobsToLoot.length,
+      processed: 0,
+      success: 0,
+      fail: 0,
+      items: [],
+      rewards: { exp: 0, gold: 0, damage_dealt: 0 },
+    };
+    for (const mon of mobsToLoot) {
+      // Getting monster id from the href of the view button (eww)
+      const viewBtn = mon.querySelector('a[href*="battle.php"]');
+      if (!viewBtn) continue;
+      const params = new URLSearchParams(viewBtn.href.split("?")[1]);
+      const monsterId = params.get("dgmid");
+      try {
+        const lootData = await lootMonster(monsterId, instanceId);
+        if (Array.isArray(lootData.items)) {
+          allLootData.items.push(...lootData.items);
+        }
+        const rewards = lootData.rewards;
+        if (
+          !rewards ||
+          !("exp" in rewards) ||
+          !("gold" in rewards) ||
+          !("damage_dealt" in rewards)
+        ) {
+          throw new Error("no rewards object");
+        }
+        allLootData.rewards.exp += lootData.rewards.exp;
+        allLootData.rewards.gold += lootData.rewards.gold;
+        allLootData.rewards.damage_dealt += lootData.rewards.damage_dealt;
+        allLootData.success += 1;
+      } catch (e) {
+        console.error("Failed to loot monster:", monsterId, e);
+        allLootData.fail += 1;
+      }
+
+      allLootData.processed += 1;
+
+      // Check if leveled up
+      if (allLootData.rewards.exp >= expToLevel) {
+        allLootData.leveledUp = true;
+        if (stopIfLevelUp) {
+          break;
+        }
+      }
+    }
+
+    showNotification("All lootable monsters processed!");
+    showLootModal(allLootData);
+  }
+
+  async function injectCubeLootAllButton(instanceId) {
+    const lootBtn = document.createElement("button");
+    lootBtn.className = "btn";
+    lootBtn.textContent = "Loot All";
+
+    lootBtn.addEventListener("click", async () => {
+      lootBtn.textContent = "Looting...";
+      lootBtn.setAttribute("disabled", true);
+
+      await lootAllCubeMonsters(instanceId, stopLootingOnLevelUp);
+
+      lootBtn.textContent = "Loot All";
+      lootBtn.removeAttribute("disabled");
+    });
+
+    const row = document.querySelector(".stageTools");
+    row.appendChild(lootBtn);
+  }
+
+  (async function cubeDungeonLooting() {
+    if (
+      window.location.href.includes("guild_dungeon_cube.php") &&
+      useDungeonLoot
+    ) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const id = urlParams.get("instance_id");
+      if (id) {
+        injectCubeLootAllButton(id);
+      }
+    }
+  })();
+
+  // ------------------------- Cube Dungeon Loot All ------------------------ //
 })();
