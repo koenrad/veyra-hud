@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.4.0
+// @version      2.5.0
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,18 +30,22 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- Added "Loot All" button to the cube dungeon. Uses same settings to stop looting on level up.
+const PATCH_NOTES = `- Added loot all support for hard dungeon (stops on level up if set)
+- fixed change log version history (idk maybe I had a stroke or something)
 
-3.5.8:
+2.4.0:
+- Added "Loot All" button to the cube dungeon. Uses same settings to stop looting on level up.
+
+2.3.8:
 - accidentally removed decraft altar, added it back
 
-3.5.7:
+2.3.7:
 - Added button "Go To Battle #monsterid" on the strategic attack resuts (new tab). This is useful to go to a monster that was skipped due to attacking too fast.
 - Removed extra emberfall links, moves vanilla link to bottom
 - Added link to Shadow Army below Inventory.
 - Added the vanilla active highlighting to custom menu items
 
-3.5.6:
+2.3.6:
 - Made delay between strategic attacks configurable (Wave Page section). default: 1050 miliseconds (just over 1 second)
 - If you get "Slow down..." while using strategic attacks try increasing it by ~100 at a time.
 
@@ -2895,13 +2899,13 @@ v2.2.2:
   }
 
   async function lootAllMonsters(instanceId, stopIfLevelUp = true) {
-    let locations = ["1", "2", "3", "4"];
+    const pins = document.querySelectorAll(".mapwrap .pin:not(.locked)");
+    const locationUrls = Array.from(pins).map((pin) => pin.href);
+
     let mobsToLoot = [];
     const expToLevel = getRequiredExperienceToLevel();
-    for (const location of locations) {
-      const locationPage = await internalFetch(
-        `/guild_dungeon_location.php?instance_id=${instanceId}&location_id=${location}`
-      );
+    for (const url of locationUrls) {
+      const locationPage = await internalFetch(url);
       const unlootedMobs = getUnootedMobs(locationPage);
       mobsToLoot.push(...unlootedMobs);
     }
