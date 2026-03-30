@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.5.0
+// @version      2.5.1
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,7 +30,11 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- Added loot all support for hard dungeon (stops on level up if set)
+const PATCH_NOTES = `- Moves the attack modal into the page on solo pvp.
+- Adds green glow around attack modal when it is your turn (solo pvp)
+
+2.5.0
+- Added loot all support for hard dungeon (stops on level up if set)
 - fixed change log version history (idk maybe I had a stroke or something)
 
 2.4.0:
@@ -3441,4 +3445,120 @@ v2.2.2:
   })();
 
   // ------------------------- Cube Dungeon Loot All ------------------------ //
+
+  // ------------------------------- Solo PvP ------------------------------- //
+
+  GM_addStyle(`
+      .my-turn {
+        border: 1px solid #2ecc71;
+        animation: glowPulse 1.5s infinite ease-in-out;
+      }
+
+      @keyframes glowPulse {
+        0% {
+          box-shadow: 0 0 6px 2px rgba(46, 204, 113, 0.5);
+        }
+        50% {
+          box-shadow: 0 0 20px 6px rgba(46, 204, 113, 1);
+        }
+        100% {
+          box-shadow: 0 0 6px 2px rgba(46, 204, 113, 0.5);
+        }
+      }
+  `);
+
+  const { container: useCustomSoloPvPStylesToggle } = createSettingsInput({
+    key: "ui-improvements:useCustomSoloPvPStyles",
+    label: "Solo PvP Improvements",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
+  addSettingsGroup("pvp", "PvP", "Settings related to PvP", [
+    useCustomSoloPvPStylesToggle,
+  ]);
+
+  const useCustomSoloPvPStyles = Storage.get(
+    "ui-improvements:useCustomSoloPvPStyles",
+    true
+  );
+
+  if (
+    window.location.href.includes("pvp_battle.php") &&
+    useCustomSoloPvPStyles
+  ) {
+    const ladderValue = [...document.querySelectorAll(".pill")]
+      .find((p) => p.querySelector(".lbl")?.textContent.trim() === "Ladder")
+      ?.querySelector(".val")
+      ?.textContent.trim();
+    const isSolo = ladderValue.toLowerCase() === "solo";
+    console.log("isSolo", isSolo);
+    if (isSolo) {
+      const turnCard = [...document.querySelectorAll(".card")].find((card) =>
+        card.querySelector(".card-title")?.textContent.includes("Turn Control")
+      );
+      const modalBox = document.querySelector(".modalBox");
+      const playerEl = document.querySelector(".topbar .pill .val.dim");
+      const turnWhoEl = document.getElementById("turnWho");
+
+      function getPlayerName() {
+        const raw = playerEl?.textContent || "";
+        return raw.trim().toLowerCase();
+      }
+
+      function getTurnName() {
+        const raw = turnWhoEl?.textContent || "";
+        return raw.replace("🎯", "").trim().toLowerCase();
+      }
+
+      const playerName = getPlayerName();
+
+      function checkTurn() {
+        const turnName = getTurnName();
+
+        if (!playerName || !turnName) return;
+
+        if (turnName.includes(playerName)) {
+          modalBox.classList.add("my-turn");
+        } else {
+          modalBox.classList.remove("my-turn");
+        }
+      }
+
+      const moveSkillsModal = () => {
+        const modalBox = document.querySelector("#skillsModal .modalBox");
+        modalBox.classList.add("card");
+        modalBox.style.width = "100%";
+
+        // Remove close button
+        const closeBtn = modalBox.querySelector("#closeSkillsBtn");
+        if (closeBtn) closeBtn.remove();
+
+        // Move the skills modal into the page
+        turnCard.insertAdjacentElement("beforebegin", modalBox);
+
+        // use observer to get the initial pSlot target key
+        const observer = new MutationObserver(() => {
+          const enemySlot = document.querySelector('.pSlot[data-side="enemy"]');
+          if (enemySlot) {
+            selectedTargetKey = enemySlot.dataset.key;
+            observer.disconnect(); // stop observing once found
+          }
+        });
+
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true,
+        });
+      };
+
+      (async function soloPvPMain(doc = document) {
+        moveSkillsModal();
+        setInterval(checkTurn, 200);
+      })();
+    }
+  }
+
+  // ------------------------------- Solo PvP ------------------------------- //
 })();
