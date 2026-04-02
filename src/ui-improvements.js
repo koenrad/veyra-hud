@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.5.2
+// @version      2.5.3
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,7 +30,11 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- Improved the custom solo PVP attack buttons.
+const PATCH_NOTES = `- Added last hit info in solo pvp, can be disabled in settings
+- Added setting to disable the attack buttons on solo pvp
+
+2.5.2:
+- Improved the custom solo PVP attack buttons.
 
 2.5.1:
 - Moves the attack modal into the page on solo pvp.
@@ -3468,6 +3472,23 @@ v2.2.2:
           box-shadow: 0 0 6px 2px rgba(46, 204, 113, 0.5);
         }
       }
+      .lastHitBox.animate {
+        animation: hitPop 400ms ease;
+      }
+
+      @keyframes hitPop {
+        0% {
+          transform: scale(0.9);
+          opacity: 0;
+        }
+        50% {
+          transform: scale(1.05);
+          opacity: 1;
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
   `);
 
   const { container: useCustomSoloPvPStylesToggle } = createSettingsInput({
@@ -3478,14 +3499,50 @@ v2.2.2:
     inputProps: { slider: true },
   });
 
+  const { container: showAttackCardToggle } = createSettingsInput({
+    key: "ui-improvements:showAttackCard",
+    label: "Show Attack Card",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
+  const { container: showEnemyLastHitToggle } = createSettingsInput({
+    key: "ui-improvements:showEnemyLastHit",
+    label: "Show Enemy Last Hit",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
+  const { container: showAllyLastHitToggle } = createSettingsInput({
+    key: "ui-improvements:showAllyLastHit",
+    label: "Show Ally Last Hit",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
   addSettingsGroup("pvp", "PvP", "Settings related to PvP", [
     useCustomSoloPvPStylesToggle,
+    showEnemyLastHitToggle,
+    showAllyLastHitToggle,
+    showAttackCardToggle,
   ]);
 
   const useCustomSoloPvPStyles = Storage.get(
     "ui-improvements:useCustomSoloPvPStyles",
     true
   );
+
+  const showAttackCard = Storage.get("ui-improvements:showAttackCard", true);
+
+  const showEnemyLastHit = Storage.get(
+    "ui-improvements:showEnemyLastHit",
+    true
+  );
+
+  const showAllyLastHit = Storage.get("ui-improvements:showAllyLastHit", true);
 
   if (
     window.location.href.includes("pvp_battle.php") &&
@@ -3532,6 +3589,13 @@ v2.2.2:
       }
 
       function checkTurn() {
+        if (showEnemyLastHit) {
+          renderLastHitEnemy();
+        }
+        if (showAllyLastHit) {
+          renderLastHitAlly();
+        }
+
         const turnName = getTurnName();
         const modalBox = document.querySelector(".modalBox.card");
 
@@ -3542,7 +3606,6 @@ v2.2.2:
         } else {
           modalBox.classList.remove("my-turn");
         }
-
         syncTokenCount();
       }
 
@@ -3595,6 +3658,28 @@ v2.2.2:
         return null;
       }
 
+      function getLastHitByTargetSide(logDetailsMap, side) {
+        const entries = Object.values(logDetailsMap);
+
+        for (let i = entries.length - 1; i >= 0; i--) {
+          const entry = entries[i];
+
+          if (entry && entry.kind === "attack" && entry.target?.side === side) {
+            const hpDamage = entry.target.hp_before - entry.target.hp_after;
+
+            const actualDamage = entry.formula?.target_damage_dealt;
+
+            return {
+              hpDamage,
+              actualDamage,
+              entry,
+            };
+          }
+        }
+
+        return null;
+      }
+
       function createSkillModal(tokens = 0) {
         // outer container
         const modal = document.createElement("div");
@@ -3607,7 +3692,7 @@ v2.2.2:
 
         const title = document.createElement("div");
         title.className = "mhTitle";
-        title.textContent = "Choose a Skill";
+        title.textContent = "Active Skills";
 
         const rightWrap = document.createElement("div");
         rightWrap.style.display = "flex";
@@ -3630,18 +3715,11 @@ v2.2.2:
         const modalBody = document.createElement("div");
         modalBody.className = "modalBody";
 
-        const sectionTitle = document.createElement("div");
-        sectionTitle.textContent = "Active Skills";
-        sectionTitle.style.margin = "0 0 10px";
-        sectionTitle.style.fontWeight = "900";
-        sectionTitle.style.opacity = "0.9";
-
         const skillsGrid = document.createElement("div");
         skillsGrid.className = "skillsGrid";
         skillsGrid.id = "skillsGrid2";
 
         // assemble body
-        modalBody.appendChild(sectionTitle);
         modalBody.appendChild(skillsGrid);
 
         // assemble modal
@@ -3649,6 +3727,116 @@ v2.2.2:
         modal.appendChild(modalBody);
 
         return modal;
+      }
+
+      function renderLastHitEnemy() {
+        if (!logDetailsMap) {
+          return;
+        }
+        const result = getLastEnemyDamage(logDetailsMap);
+        if (!result) return;
+
+        const { hpDamage, actualDamage, entry } = result;
+
+        const card = document.querySelector("#topTeamCard .card-b");
+        if (!card) return;
+
+        const key = entry?.actor?.key + "|" + entry?.target?.hp_after;
+
+        let box = card.querySelector(".lastHitBox");
+
+        // Create if it doesn't exist
+        if (!box) {
+          box = document.createElement("div");
+          box.className = "lastHitBox";
+          box.style.marginTop = "10px";
+          box.style.padding = "8px";
+          box.style.borderRadius = "8px";
+          box.style.background = "rgba(0,150,255,0.08)";
+          box.style.fontWeight = "700";
+          box.style.display = "grid";
+          box.style.justifyContent = "center";
+
+          card.appendChild(box);
+        }
+
+        // Skip update if same hit
+        if (box.dataset.lastKey === key) return;
+
+        box.dataset.lastKey = key;
+
+        // Update content
+        box.innerHTML = `
+          <div style="opacity:.8;font-size:12px;">Last Hit</div>
+          <div style="font-size:16px;">
+            ${entry.skill?.name || "Attack"}
+          </div>
+          <div style="color:#4db3ff;">
+            ${actualDamage.toLocaleString()} dmg
+          </div>
+          <div style="font-size:12px;opacity:.7;">
+            HP Loss: ${hpDamage.toLocaleString()}
+          </div>
+        `;
+
+        box.classList.remove("animate");
+        void box.offsetWidth; // force reflow (important)
+        box.classList.add("animate");
+      }
+
+      function renderLastHitAlly() {
+        if (!logDetailsMap) {
+          return;
+        }
+        const result = getLastHitByTargetSide(logDetailsMap, "ally");
+        if (!result) return;
+
+        const { hpDamage, actualDamage, entry } = result;
+
+        const card = document.querySelector("#bottomTeamCard .card-b");
+        if (!card) return;
+
+        const key = `${entry.actor.key}-${entry.target.hp_before}-${entry.target.hp_after}`;
+
+        let box = card.querySelector(".lastHitBox");
+
+        // Create if missing
+        if (!box) {
+          box = document.createElement("div");
+          box.className = "lastHitBox";
+          box.style.marginTop = "10px";
+          box.style.padding = "8px";
+          box.style.borderRadius = "8px";
+          box.style.background = "rgba(255,0,0,0.08)";
+          box.style.fontWeight = "700";
+          box.style.display = "grid";
+          box.style.justifyContent = "center";
+
+          card.prepend(box);
+        }
+
+        // Skip if same hit
+        if (box.dataset.lastKey === key) return;
+
+        box.dataset.lastKey = key;
+
+        // Update content
+        box.innerHTML = `
+          <div style="opacity:.8;font-size:12px;">Last Hit Taken</div>
+          <div style="font-size:16px;">
+            ${entry.skill?.name || "Attack"}
+          </div>
+          <div style="color:#ff6b6b;">
+            ${actualDamage.toLocaleString()} dmg
+          </div>
+          <div style="font-size:12px;opacity:.7;">
+            HP Loss: ${hpDamage.toLocaleString()}
+          </div>
+        `;
+
+        box.classList.remove("animate");
+        void box.offsetWidth; // force reflow (important)
+        box.classList.add("animate");
       }
 
       const initializeSkillsModal = () => {
@@ -3673,7 +3861,9 @@ v2.2.2:
       };
 
       (async function soloPvPMain(doc = document) {
-        initializeSkillsModal();
+        if (showAttackCard) {
+          initializeSkillsModal();
+        }
         setInterval(checkTurn, 333);
       })();
     }
