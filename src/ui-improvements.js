@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.5.1
+// @version      2.5.2
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,10 +30,13 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- Moves the attack modal into the page on solo pvp.
+const PATCH_NOTES = `- Improved the custom solo PVP attack buttons.
+
+2.5.1:
+- Moves the attack modal into the page on solo pvp.
 - Adds green glow around attack modal when it is your turn (solo pvp)
 
-2.5.0
+2.5.0:
 - Added loot all support for hard dungeon (stops on level up if set)
 - fixed change log version history (idk maybe I had a stroke or something)
 
@@ -3498,7 +3501,7 @@ v2.2.2:
       const turnCard = [...document.querySelectorAll(".card")].find((card) =>
         card.querySelector(".card-title")?.textContent.includes("Turn Control")
       );
-      const modalBox = document.querySelector(".modalBox");
+
       const playerEl = document.querySelector(".topbar .pill .val.dim");
       const turnWhoEl = document.getElementById("turnWho");
 
@@ -3514,35 +3517,151 @@ v2.2.2:
 
       const playerName = getPlayerName();
 
+      function syncTokenCount() {
+        const myTokens = document.querySelector("#myTokens");
+        const modalTokens = document.querySelector("#modalTokens");
+        modalTokens.textContent = myTokens.textContent;
+        const tokens = Number(modalTokens.textContent);
+
+        for (const skillCard of document.querySelectorAll(
+          "#skillsGrid2 .skillCard"
+        )) {
+          const cost = Number(skillCard.dataset.cost);
+          skillCard.disabled = tokens < cost;
+        }
+      }
+
       function checkTurn() {
         const turnName = getTurnName();
+        const modalBox = document.querySelector(".modalBox.card");
 
-        if (!playerName || !turnName) return;
+        if (!playerName || !turnName || !modalBox) return;
 
         if (turnName.includes(playerName)) {
           modalBox.classList.add("my-turn");
         } else {
           modalBox.classList.remove("my-turn");
         }
+
+        syncTokenCount();
       }
 
-      const moveSkillsModal = () => {
-        const modalBox = document.querySelector("#skillsModal .modalBox");
-        modalBox.classList.add("card");
-        modalBox.style.width = "100%";
+      function populateSkills() {
+        const modalBox = document.querySelector(".modalBox.card");
+        if (modalBox) {
+          console.log("modalBox");
+          const skillsGrid = modalBox.querySelector("#skillsGrid2");
+          mySkills
+            .filter((skill) => {
+              const target = String(skill.target || "enemy");
+              return target === "enemy" || target === "self";
+            })
+            .forEach((skill) => {
+              skillsGrid.appendChild(
+                createSkillButton(skill, () =>
+                  useSkill(
+                    String(skill.id || "0"),
+                    String(skill.target || "enemy")
+                  )
+                )
+              );
+            });
+        }
+      }
 
-        // Remove close button
-        const closeBtn = modalBox.querySelector("#closeSkillsBtn");
-        if (closeBtn) closeBtn.remove();
+      function getLastEnemyDamage(logDetailsMap) {
+        const entries = Object.values(logDetailsMap);
 
-        // Move the skills modal into the page
+        for (let i = entries.length - 1; i >= 0; i--) {
+          const entry = entries[i];
+
+          if (
+            entry &&
+            entry.kind === "attack" &&
+            entry.target?.side === "enemy"
+          ) {
+            const hpDamage = entry.target.hp_before - entry.target.hp_after;
+
+            const actualDamage = entry.formula?.target_damage_dealt;
+
+            return {
+              hpDamage,
+              actualDamage,
+              entry,
+            };
+          }
+        }
+
+        return null;
+      }
+
+      function createSkillModal(tokens = 0) {
+        // outer container
+        const modal = document.createElement("div");
+        modal.className = "modalBox card";
+        modal.style.width = "100%";
+
+        // header
+        const modalHead = document.createElement("div");
+        modalHead.className = "modalHead";
+
+        const title = document.createElement("div");
+        title.className = "mhTitle";
+        title.textContent = "Choose a Skill";
+
+        const rightWrap = document.createElement("div");
+        rightWrap.style.display = "flex";
+        rightWrap.style.gap = "10px";
+        rightWrap.style.alignItems = "center";
+        rightWrap.style.flexWrap = "wrap";
+
+        // tokens chip
+        const badge = document.createElement("span");
+        badge.className = "badge";
+        badge.innerHTML = `Tokens: <span id="modalTokens">${tokens}</span>`;
+
+        // assemble header
+        rightWrap.appendChild(badge);
+
+        modalHead.appendChild(title);
+        modalHead.appendChild(rightWrap);
+
+        // body
+        const modalBody = document.createElement("div");
+        modalBody.className = "modalBody";
+
+        const sectionTitle = document.createElement("div");
+        sectionTitle.textContent = "Active Skills";
+        sectionTitle.style.margin = "0 0 10px";
+        sectionTitle.style.fontWeight = "900";
+        sectionTitle.style.opacity = "0.9";
+
+        const skillsGrid = document.createElement("div");
+        skillsGrid.className = "skillsGrid";
+        skillsGrid.id = "skillsGrid2";
+
+        // assemble body
+        modalBody.appendChild(sectionTitle);
+        modalBody.appendChild(skillsGrid);
+
+        // assemble modal
+        modal.appendChild(modalHead);
+        modal.appendChild(modalBody);
+
+        return modal;
+      }
+
+      const initializeSkillsModal = () => {
+        const modalBox = createSkillModal(0);
+        // Add the skills modal into the page
         turnCard.insertAdjacentElement("beforebegin", modalBox);
 
-        // use observer to get the initial pSlot target key
+        // use observer to get the initial pSlot target key & populate the skills
         const observer = new MutationObserver(() => {
           const enemySlot = document.querySelector('.pSlot[data-side="enemy"]');
           if (enemySlot) {
             selectedTargetKey = enemySlot.dataset.key;
+            populateSkills();
             observer.disconnect(); // stop observing once found
           }
         });
@@ -3554,8 +3673,8 @@ v2.2.2:
       };
 
       (async function soloPvPMain(doc = document) {
-        moveSkillsModal();
-        setInterval(checkTurn, 200);
+        initializeSkillsModal();
+        setInterval(checkTurn, 333);
       })();
     }
   }
