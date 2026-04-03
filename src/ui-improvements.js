@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.5.3
+// @version      2.5.4
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,7 +30,11 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- Added last hit info in solo pvp, can be disabled in settings
+const PATCH_NOTES = `- Made the pvp battle history links so you can easily view defends/wins (can be disabled: "Link Recent Battles")
+- Re-arranges the layout, moving the recent battles up. (can be disabled: "Move Recent Battles")
+
+2.5.3:
+- Added last hit info in solo pvp, can be disabled in settings
 - Added setting to disable the attack buttons on solo pvp
 
 2.5.2:
@@ -3523,11 +3527,29 @@ v2.2.2:
     inputProps: { slider: true },
   });
 
+  const { container: moveRecentBattlesToggle } = createSettingsInput({
+    key: "ui-improvements:moveRecentBattles",
+    label: "Move Recent Battles",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
+  const { container: linkRecentBattlesToggle } = createSettingsInput({
+    key: "ui-improvements:linkRecentBattles",
+    label: "Link Recent Battles",
+    defaultValue: true,
+    type: "checkbox",
+    inputProps: { slider: true },
+  });
+
   addSettingsGroup("pvp", "PvP", "Settings related to PvP", [
     useCustomSoloPvPStylesToggle,
     showEnemyLastHitToggle,
     showAllyLastHitToggle,
     showAttackCardToggle,
+    moveRecentBattlesToggle,
+    linkRecentBattlesToggle,
   ]);
 
   const useCustomSoloPvPStyles = Storage.get(
@@ -3539,6 +3561,16 @@ v2.2.2:
 
   const showEnemyLastHit = Storage.get(
     "ui-improvements:showEnemyLastHit",
+    true
+  );
+
+  const moveRecentBattles = Storage.get(
+    "ui-improvements:moveRecentBattles",
+    true
+  );
+
+  const linkRecentBattles = Storage.get(
+    "ui-improvements:linkRecentBattles",
     true
   );
 
@@ -3870,4 +3902,72 @@ v2.2.2:
   }
 
   // ------------------------------- Solo PvP ------------------------------- //
+
+  // ----------------------------- PvP Main Page ---------------------------- //
+
+  if (window.location.href.includes("pvp.php") && useCustomSoloPvPStyles) {
+    function bindLeaderCardLinks() {
+      document.querySelectorAll(".leader-card").forEach((card) => {
+        if (card.dataset.linkBound) return;
+        const matchEl = card.querySelector(".info-pill span");
+        if (!matchEl) return;
+
+        const matchId = matchEl.textContent.replace("#", "").trim();
+        if (!matchId) return;
+
+        const url = `/pvp_battle.php?match_id=${matchId}`;
+
+        // UX improvements
+        card.style.cursor = "pointer";
+
+        card.addEventListener("click", (e) => {
+          // Prevent weird behavior if user clicks text selection, etc.
+          if (window.getSelection().toString()) return;
+
+          window.location.href = url;
+        });
+
+        // Optional: allow middle-click / ctrl-click like a real link
+        card.addEventListener("auxclick", (e) => {
+          if (e.button === 1) {
+            window.open(url, "_blank");
+          }
+        });
+
+        card.dataset.linkBound = "true";
+      });
+    }
+
+    function moveRecent() {
+      // 1. Main container
+      const mainCol = document.querySelector(".grid-col--main");
+
+      // 2. Find ALL sections that contain "Recent"
+      const recentSections = Array.from(document.querySelectorAll(".section"))
+        .filter((section) => {
+          const title = section.querySelector(".section-title");
+          return title && title.textContent.includes("Recent");
+        })
+        .map((section) => {
+          section.style.order = "6";
+          return section;
+        });
+
+      // 3. Move them into the main column (at the top or wherever you want)
+      recentSections.forEach((section) => {
+        mainCol.appendChild(section); // moves, not clones
+      });
+    }
+
+    (async function mainPvP(doc = document) {
+      if (linkRecentBattles) {
+        bindLeaderCardLinks();
+      }
+      if (moveRecentBattles) {
+        moveRecent();
+      }
+    })();
+  }
+
+  // ----------------------------- PvP Main Page ---------------------------- //
 })();
