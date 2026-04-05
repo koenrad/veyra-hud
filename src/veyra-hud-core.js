@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Veyra Hud Core
 // @namespace    http://tampermonkey.net/
-// @version      2.0.11
+// @version      2.0.12
 // @description  Core functionality for veyra-hud
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
@@ -161,12 +161,16 @@ function getCookie(name) {
     ?.split("=")[1];
 }
 
-async function internalFetch(url) {
+async function internalFetch(url, middleware = async (doc) => {}) {
   const response = await fetch(url);
   const html = await response.text();
 
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, "text/html");
+
+  if (typeof middleware === "function") {
+    await middleware(doc);
+  }
 
   return doc;
 }
