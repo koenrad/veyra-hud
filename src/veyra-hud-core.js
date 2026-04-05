@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Veyra Hud Core
 // @namespace    http://tampermonkey.net/
-// @version      2.0.12
+// @version      2.0.13
 // @description  Core functionality for veyra-hud
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
@@ -146,7 +146,7 @@ function refreshPage(msg) {
     console.warn(`Refresh intercepted. ${msg ? msg.toString() : ""} `);
     return;
   }
-  console.log("refreshing page");
+  console.log(`refreshing page${msg ? `: ${msg}` : ""}`);
   window.location.reload();
 }
 
@@ -173,6 +173,12 @@ async function internalFetch(url, middleware = async (doc) => {}) {
   }
 
   return doc;
+}
+
+async function cfCheckMiddleware(doc) {
+  if (cfError(doc)) {
+    refreshPage();
+  }
 }
 
 function cfError(doc = document) {
