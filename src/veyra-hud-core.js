@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Veyra Hud Core
 // @namespace    http://tampermonkey.net/
-// @version      2.0.10
+// @version      2.0.11
 // @description  Core functionality for veyra-hud
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/veyra-hud-core.js
@@ -169,6 +169,20 @@ async function internalFetch(url) {
   const doc = parser.parseFromString(html, "text/html");
 
   return doc;
+}
+
+function cfError(doc = document) {
+  const cloudFlareError = doc.querySelector("#cf-error-details");
+  const cloudFlareErrorWrapper = doc.querySelector("#cf-wrapper");
+  const cloudFlareStatusElement = doc.querySelector("#cf-cloudflare-status");
+  const cloudFlareVerificationCheck = doc.querySelector(".ch-description");
+
+  return !!(
+    cloudFlareError ||
+    cloudFlareErrorWrapper ||
+    cloudFlareStatusElement ||
+    cloudFlareVerificationCheck
+  );
 }
 
 async function getUserId() {
