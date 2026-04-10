@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.5.4
+// @version      2.5.5
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,7 +30,11 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- Made the pvp battle history links so you can easily view defends/wins (can be disabled: "Link Recent Battles")
+const PATCH_NOTES = `- Updated the emberfall event link
+- Added link to event wave 🌊 Arcane Wild Fringe
+
+2.5.4:
+- Made the pvp battle history links so you can easily view defends/wins (can be disabled: "Link Recent Battles")
 - Re-arranges the layout, moving the recent battles up. (can be disabled: "Move Recent Battles")
 
 2.5.3:
@@ -358,16 +362,18 @@ v2.2.2:
         "Emberfall Event"
     );
 
-    // Move event link to the bottom of the menu
-    if (eventLink) {
-      addMenuLinkAfter(
-        "Battle Pass",
-        eventLink.href,
-        eventLink.querySelector(".side-label").textContent,
-        eventLink.querySelector(".side-icon").textContent
-      );
-      eventLink.remove();
-    }
+    eventLink.href = "/event_page.php?event=8";
+
+    // // Move event link to the bottom of the menu
+    // if (eventLink) {
+    //   addMenuLinkAfter(
+    //     "Battle Pass",
+    //     eventLink.href,
+    //     eventLink.querySelector(".side-label").textContent,
+    //     eventLink.querySelector(".side-icon").textContent
+    //   );
+    //   eventLink.remove();
+    // }
 
     // Find the "Home" link by its label text
     const homeLink = [...document.querySelectorAll(".side-nav-item")].find(
@@ -375,6 +381,13 @@ v2.2.2:
     );
 
     if (homeLink) {
+      addMenuLinkAfter(
+        "Emberfall Event",
+        "/active_wave.php?event=8&wave=101",
+        "Arcane Wild Fringe",
+        "🌊 "
+      );
+
       addMenuLinkAfter(
         "Home",
         "/active_wave.php?gate=3&wave=8",
