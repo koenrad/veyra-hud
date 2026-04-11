@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.5.5
+// @version      2.5.6
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,7 +30,10 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim())
 );
 
-const PATCH_NOTES = `- Updated the emberfall event link
+const PATCH_NOTES = `- Fix for faster loot x. May be limited to batches of 2000 now.
+
+2.5.5:
+- Updated the emberfall event link
 - Added link to event wave 🌊 Arcane Wild Fringe
 
 2.5.4:
@@ -903,7 +906,10 @@ v2.2.2:
       const unclaimedKills = [...document.querySelectorAll(".unclaimed-pill")]
         .find((el) => el.textContent.includes("Unclaimed kills"))
         ?.querySelector(".count")?.textContent;
-      const unclaimedKillsNumber = Number(unclaimedKills);
+
+      const unclaimedKillsNumber =
+        Number(parseInt(unclaimedKills.replace(/\D/g, ""), 10)) || 200;
+
       const actualNumberToLoot = Math.min(numMobs, unclaimedKillsNumber);
       const numPages = Math.ceil(unclaimedKillsNumber / PAGINATION_PAGE_SIZE);
 
