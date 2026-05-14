@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UI Improvements
 // @namespace    http://tampermonkey.net/
-// @version      2.5.8
+// @version      2.5.9
 // @description  Makes various ui improvements. Faster lootX, extra menu items, auto scroll to current battlepass, sync battlepass scroll bars
 // @author       [SEREPH] koenrad
 // @updateURL    https://raw.githubusercontent.com/koenrad/veyra-hud/refs/heads/main/src/ui-improvements.js
@@ -30,9 +30,12 @@ const LOOTING_BLACKLIST_SET = new Set(
   LOOTING_BLACKLIST.map((name) => name.toLowerCase().trim()),
 );
 
-const PATCH_NOTES = `- Adds retries attack when rate limited in the strategic attack. Should be little to no failures now.
+const PATCH_NOTES = `- fixed "Use Groups" styling on wave page
 
-2.5.6:
+2.5.8:
+- Adds retries attack when rate limited in the strategic attack. Should be little to no failures now.
+
+2.5.7:
 - Adds roles to enemy formation on solo and party pvp battle page.
 
 2.5.6:
@@ -1502,7 +1505,7 @@ v2.2.2:
       }
 
       .custom-monster-container {
-        display: flex;
+        display: flex !important;
         flex-direction: column;
         gap: 24px;
       }
